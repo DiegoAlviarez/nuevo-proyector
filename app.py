@@ -9,8 +9,7 @@ from rich.live import Live
 from rich.layout import Layout
 from rich.table import Table
 import joblib
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
+import numpy as np
 
 # Configuración de Gemini 2.0
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -29,30 +28,26 @@ class AISecurityTrainer:
         except:
             self.model = None
             
-    async def generate_training_data(self, samples=500):
-        with Progress(SpinnerColumn(), *Progress.get_default_columns()) as progress:
-            task = progress.add_task("[cyan]Consultando a Gemini 2.0...", total=samples)
-            
-            weak_passwords = []
-            strong_passwords = []
-            
-            # Generar contraseñas débiles con Gemini
-            response = await model.generate_content_async(
-                "Genera 250 ejemplos de contraseñas inseguras comunes y patrones débiles, solo las contraseñas separadas por comas"
-            )
-            weak_passwords = response.text.split(", ")[:250]
-            
-            # Generar contraseñas fuertes con Gemini
-            response = await model.generate_content_async(
-                "Genera 250 ejemplos de contraseñas seguras complejas con mezcla de caracteres, solo las contraseñas separadas por comas"
-            )
-            strong_passwords = response.text.split(", ")[:250]
-            
-            X = [self.extract_features(pwd) for pwd in weak_passwords + strong_passwords]
-            y = [0]*len(weak_passwords) + [1]*len(strong_passwords)
-            
-            progress.update(task, advance=samples)
-            return np.array(X), np.array(y)
+    def generate_training_data(self, samples=500):
+        weak_passwords = []
+        strong_passwords = []
+        
+        # Generar contraseñas débiles con Gemini
+        response = model.generate_content(
+            "Genera 250 ejemplos de contraseñas inseguras comunes, solo las contraseñas separadas por comas"
+        )
+        weak_passwords = response.text.split(", ")[:250]
+        
+        # Generar contraseñas fuertes con Gemini
+        response = model.generate_content(
+            "Genera 250 ejemplos de contraseñas seguras complejas, solo las contraseñas separadas por comas"
+        )
+        strong_passwords = response.text.split(", ")[:250]
+        
+        X = [self.extract_features(pwd) for pwd in weak_passwords + strong_passwords]
+        y = [0]*len(weak_passwords) + [1]*len(strong_passwords)
+        
+        return np.array(X), np.array(y)
     
     def extract_features(self, password):
         return [
@@ -63,12 +58,12 @@ class AISecurityTrainer:
             len(set(password))/max(len(password), 1)
         ]
     
-    def dynamic_train(self, live):
-        # Generación de datos con animación
-        with Live(self.create_loading_panel(0), refresh_per_second=10) as live_session:
+    def dynamic_train(self):
+        with Live(self.create_loading_panel(0), refresh_per_second=10, screen=True) as live:
+            # Generación de datos con animación
             for i in range(1, 101):
                 time.sleep(0.05)
-                live_session.update(self.create_loading_panel(i))
+                live.update(self.create_loading_panel(i))
                 
             X, y = self.generate_training_data()
             
@@ -82,7 +77,8 @@ class AISecurityTrainer:
                 acc = self.model.score(X, y)
                 accuracies.append(acc)
                 
-                live_session.update(self.create_training_panel(epoch, acc, accuracies))
+                live.update(self.create_training_panel(epoch, acc, accuracies))
+                time.sleep(0.05)
                 
             joblib.dump(self.model, "wildpass_model.pkl")
             
@@ -97,7 +93,7 @@ class AISecurityTrainer:
             
             f"[bold]Precisión:[/bold] {accuracy*100:.1f}%\n"
             f"[bold]Árboles:[/bold] {epoch*10}\n"
-            f"[bold]Muestras:[/bold] {len(self.training_data[0])}"
+            f"[bold]Muestras:[/bold] {len(X) if 'X' in locals() else 0}"
         )
         
         return Panel(
@@ -138,16 +134,12 @@ def main_interface():
             Panel("[bold]1. Generar Contraseña Cuántica\n2. Escáner de Seguridad\n3. Entrenamiento en Vivo\n4. Salir[/]", 
                  border_style="yellow"))
         
-        with Live(layout, refresh_per_second=10, screen=True):
-            choice = input("Selección: ")
-            
-            if choice == "3":
-                layout["main"].update(
-                    Panel.fit("[italic]Iniciando entrenamiento con Gemini 2.0...[/]", border_style="blue"))
-                trainer.dynamic_train(layout)
-                
-            elif choice == "4":
-                break
+        choice = input("Selección: ")
+        
+        if choice == "3":
+            trainer.dynamic_train()
+        elif choice == "4":
+            break
 
 if __name__ == "__main__":
     main_interface()
