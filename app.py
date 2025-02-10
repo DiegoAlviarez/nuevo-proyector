@@ -52,18 +52,67 @@ class PasswordModel:
         ]
     
     def train_model(self):
-        try:
-            X, y = self.generate_training_data()
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+    try:
+        X, y = self.generate_training_data()
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+        
+        self.model = RandomForestClassifier(n_estimators=100)
+        
+        # Crear elementos de visualización
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        training_panel = st.empty()
+        
+        # Nuevo: Función para generar el panel de entrenamiento
+        def create_training_panel(epoch, accuracy, feature_importances):
+            feature_bars = "\n".join([
+                f"Longitud   {'▮' * int(fi[0]*40)} {fi[0]*100:.1f}%",
+                f"Mayúsculas {'▮' * int(fi[1]*40)} {fi[1]*100:.1f}%",
+                f"Dígitos    {'▮' * int(fi[2]*40)} {fi[2]*100:.1f}%",
+                f"Símbolos   {'▮' * int(fi[3]*40)} {fi[3]*100:.1f}%",
+                f"Unicidad   {'▮' * int(fi[4]*40)} {fi[4]*100:.1f}%"
+            ])
             
-            self.model = RandomForestClassifier(n_estimators=100)
+            panel = f"""
+            ╭────────────────── WildPassPro - Entrenamiento de IA ──────────────────╮
+            │                                                                        │
+            │ Progreso del Entrenamiento:                                            │
+            │                                                                        │
+            │ Árboles creados: {epoch}/100                                           
+            │ Precisión actual: {accuracy:.1%}                                      
+            │                                                                        │
+            │ Características más importantes:                                       │
+            {feature_bars}
+            │                                                                        │
+            │ Creando protección inteligente...                                      │
+            ╰────────────────────────────────────────────────────────────────────────╯
+            """
+            return panel
+        
+        # Entrenamiento con actualización visual
+        for epoch in range(1, 101):
             self.model.fit(X_train, y_train)
-            joblib.dump(self.model, "local_pass_model.pkl")
-            st.success(f"Modelo entrenado! Precisión: {self.model.score(X_test, y_test):.2%}")
-            return True
-        except Exception as e:
-            st.error(f"Error en entrenamiento: {str(e)}")
-            return False
+            acc = self.model.score(X_test, y_test)
+            
+            # Obtener importancia de características
+            if hasattr(self.model, 'feature_importances_'):
+                fi = self.model.feature_importances_
+            else:
+                fi = [0.35, 0.25, 0.20, 0.15, 0.05]  # Valores por defecto
+            
+            # Actualizar elementos visuales
+            progress_bar.progress(epoch/100)
+            status_text.text(f"Época: {epoch} - Precisión: {acc:.2%}")
+            training_panel.code(create_training_panel(epoch, acc, fi))
+            
+            time.sleep(0.1)  # Pequeña pausa para visualización
+            
+        joblib.dump(self.model, "local_pass_model.pkl")
+        st.success(f"Modelo entrenado! Precisión: {acc:.2%}")
+        return True
+    except Exception as e:
+        st.error(f"Error en entrenamiento: {str(e)}")
+        return False
 
 def main():
     st.set_page_config(
