@@ -1,52 +1,46 @@
 # app.py
-import os
-import time
-import google.generativeai as genai
-from rich import print
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn
-from rich.live import Live
-from rich.layout import Layout
-from rich.table import Table
+import streamlit as st
 import joblib
 import numpy as np
+import string
+import random
+from sklearn.ensemble import RandomForestClassifier
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import os
 
-# Configuración de Gemini 2.0
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-pro')
-
-class AISecurityTrainer:
+class PasswordModel:
     def __init__(self):
         self.model = None
-        self.training_data = None
         self.load_model()
         
     def load_model(self):
         try:
-            self.model = joblib.load("wildpass_model.pkl")
-            print(Panel("[green]✅ Modelo IA cargado con éxito[/green]", border_style="green"))
+            self.model = joblib.load("local_pass_model.pkl")
+            st.success("Modelo de seguridad cargado!")
         except:
             self.model = None
             
-    def generate_training_data(self, samples=500):
-        weak_passwords = []
-        strong_passwords = []
-        
-        # Generar contraseñas débiles con Gemini
-        response = model.generate_content(
-            "Genera 250 ejemplos de contraseñas inseguras comunes, solo las contraseñas separadas por comas"
-        )
-        weak_passwords = response.text.split(", ")[:250]
-        
-        # Generar contraseñas fuertes con Gemini
-        response = model.generate_content(
-            "Genera 250 ejemplos de contraseñas seguras complejas, solo las contraseñas separadas por comas"
-        )
-        strong_passwords = response.text.split(", ")[:250]
-        
-        X = [self.extract_features(pwd) for pwd in weak_passwords + strong_passwords]
-        y = [0]*len(weak_passwords) + [1]*len(strong_passwords)
-        
+    def generate_weak_password(self):
+        patterns = [
+            lambda: ''.join(random.choice(string.ascii_lowercase) for _ in range(8)),
+            lambda: ''.join(random.choice(["123456", "password", "qwerty", "admin"])),
+            lambda: ''.join(random.choice(string.digits) for _ in range(6))
+        ]
+        return random.choice(patterns)()
+    
+    def generate_strong_password(self):
+        chars = string.ascii_letters + string.digits + string.punctuation
+        return ''.join(random.SystemRandom().choice(chars) for _ in range(16))
+    
+    def generate_training_data(self, samples=1000):
+        X = []
+        y = []
+        for _ in range(samples//2):
+            X.append(self.extract_features(self.generate_weak_password()))
+            y.append(0)
+            X.append(self.extract_features(self.generate_strong_password()))
+            y.append(1)
         return np.array(X), np.array(y)
     
     def extract_features(self, password):
@@ -58,88 +52,73 @@ class AISecurityTrainer:
             len(set(password))/max(len(password), 1)
         ]
     
-    def dynamic_train(self):
-        with Live(self.create_loading_panel(0), refresh_per_second=10, screen=True) as live:
-            # Generación de datos con animación
-            for i in range(1, 101):
-                time.sleep(0.05)
-                live.update(self.create_loading_panel(i))
-                
-            X, y = self.generate_training_data()
-            
-            # Entrenamiento con actualizaciones visuales
-            self.model = RandomForestClassifier(n_estimators=100, warm_start=True)
-            accuracies = []
-            
-            for epoch in range(1, 101):
-                self.model.n_estimators = epoch
-                self.model.fit(X, y)
-                acc = self.model.score(X, y)
-                accuracies.append(acc)
-                
-                live.update(self.create_training_panel(epoch, acc, accuracies))
-                time.sleep(0.05)
-                
-            joblib.dump(self.model, "wildpass_model.pkl")
-            
-    def create_training_panel(self, epoch, accuracy, history):
-        grid = Table.grid(expand=True)
-        grid.add_column("Training", justify="left")
-        grid.add_column("Metrics", justify="right")
+    def train_model(self):
+        X, y = self.generate_training_data()
         
-        grid.add_row(
-            f"[bold]Época:[/bold] {epoch}/100\n"
-            f"[chart]▏{'█' * int(accuracy*50)}{'░' * (50 - int(accuracy*50))}[/chart]",
-            
-            f"[bold]Precisión:[/bold] {accuracy*100:.1f}%\n"
-            f"[bold]Árboles:[/bold] {epoch*10}\n"
-            f"[bold]Muestras:[/bold] {len(X) if 'X' in locals() else 0}"
-        )
+        self.model = RandomForestClassifier(n_estimators=100)
+        self.model.fit(X, y)
+        joblib.dump(self.model, "local_pass_model.pkl")
         
-        return Panel(
-            grid,
-            title="[bold blue]WildPassPro - Entrenamiento con Gemini 2.0[/]",
-            border_style="blue",
-            padding=(1, 2)
-        )
-        
-    def create_loading_panel(self, progress):
-        phases = [
-            "🔍 Analizando patrones globales...",
-            "🛡️ Optimizando seguridad...",
-            "🌐 Consultando red neuronal...",
-            "🧠 Procesando con Gemini..."
-        ]
-        return Panel(
-            f"{phases[progress % 4]}\n\n"
-            f"[cyan]{'▉' * (progress % 10)}{' ' * (10 - (progress % 10))}[/]",
-            title="[bold]Inicializando IA...[/]",
-            border_style="cyan"
-        )
+    def analyze_password(self, password):
+        if self.model is None:
+            return 0.0
+        features = self.extract_features(password)
+        return self.model.predict_proba([features])[0][1] * 100
 
-def main_interface():
-    print(Panel.fit("[bold red]🔥 WILDPASS PRO - SEGURIDAD CUÁNTICA 🔥[/]", border_style="red"))
+def main():
+    st.set_page_config(page_title="WildPass Local", page_icon="🔒", layout="wide")
     
-    layout = Layout()
-    layout.split(
-        Layout(name="header", size=3),
-        Layout(name="main", ratio=1),
-        Layout(name="footer", size=3)
-    )
+    st.title("🔐 WildPass Local - Generador Seguro")
+    st.markdown("---")
     
-    trainer = AISecurityTrainer()
+    model = PasswordModel()
     
-    while True:
-        layout["header"].update(
-            Panel("[bold]1. Generar Contraseña Cuántica\n2. Escáner de Seguridad\n3. Entrenamiento en Vivo\n4. Salir[/]", 
-                 border_style="yellow"))
+    with st.sidebar:
+        st.header("Opciones")
+        menu = st.radio("Menú:", ["Generar", "Analizar", "Entrenar"])
+    
+    if menu == "Generar":
+        st.subheader("Generador de Contraseñas")
+        col1, col2 = st.columns(2)
         
-        choice = input("Selección: ")
-        
-        if choice == "3":
-            trainer.dynamic_train()
-        elif choice == "4":
-            break
+        with col1:
+            if st.button("🔒 Generar Fuerte"):
+                password = model.generate_strong_password()
+                st.code(password, language="text")
+                
+        with col2:
+            if st.button("⚠ Generar Débil"):
+                password = model.generate_weak_password()
+                st.code(password, language="text")
+                
+    elif menu == "Analizar":
+        st.subheader("Analizador de Seguridad")
+        password = st.text_input("Introduce una contraseña:")
+        if password:
+            score = model.analyze_password(password)
+            progress = score / 100
+            
+            st.metric("Puntuación de Seguridad", f"{score:.1f}%")
+            st.progress(progress)
+            
+            features = model.extract_features(password)
+            st.json({
+                "Longitud": features[0],
+                "Mayúsculas": features[1],
+                "Dígitos": features[2],
+                "Símbolos": features[3],
+                "Unicidad": f"{features[4]*100:.1f}%"
+            })
+            
+    elif menu == "Entrenar":
+        st.subheader("Entrenamiento del Modelo")
+        if st.button("🚀 Iniciar Entrenamiento"):
+            with st.spinner("Entrenando modelo local..."):
+                model.train_model()
+            st.success("Modelo actualizado correctamente!")
+            
+            if model.model is not None:
+                st.plotly_chart(self.create_feature_importance_plot(model.model))
 
 if __name__ == "__main__":
-    main_interface()
+    main()
