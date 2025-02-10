@@ -1,116 +1,104 @@
 import streamlit as st
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-import joblib
 import random
 import string
-from collections import Counter
+import numpy as np
+import time
+import seaborn as sns
+import matplotlib.pyplot as plt
 
-# Estilos personalizados para Streamlit
-st.set_page_config(
-    page_title="WildPassPro - Seguridad de Contraseñas",
-    page_icon="🔐",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Configuración de la página
+st.set_page_config(page_title="Password AI", layout="wide")
 
-# Establecer fondo personalizado con CSS
-page_bg_img = """
-<style>
-    body {
-        background-image: url("https://source.unsplash.com/1600x900/?technology,security");
-        background-size: cover;
-    }
-    .stApp {
-        background: rgba(255, 255, 255, 0.8);
-        padding: 2rem;
-        border-radius: 10px;
-    }
-    h1 {
-        color: #333;
-    }
-</style>
-"""
-st.markdown(page_bg_img, unsafe_allow_html=True)
+# Estilos personalizados
+st.markdown("""
+    <style>
+        body {
+            background-color: black;
+            color: white;
+        }
+        .title {
+            font-size: 40px;
+            font-weight: bold;
+            text-align: center;
+            color: cyan;
+            animation: fadeIn 2s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .rotating-text {
+            font-size: 24px;
+            color: yellow;
+            animation: rotateWords 6s infinite;
+        }
+        @keyframes rotateWords {
+            0% { opacity: 0; }
+            25% { opacity: 1; }
+            50% { opacity: 0; }
+            100% { opacity: 0; }
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-# Función para generar contraseñas aleatorias
-def generar_contrasena(longitud=12, nivel="media"):
-    caracteres = string.ascii_letters
-    if nivel == "alta":
-        caracteres += string.digits + string.punctuation
-    elif nivel == "media":
-        caracteres += string.digits
-    return "".join(random.choice(caracteres) for _ in range(longitud))
+# Función para generar contraseñas
+def generate_password(length=12, strong=True):
+    if strong:
+        chars = string.ascii_letters + string.digits + string.punctuation
+    else:
+        chars = string.ascii_lowercase + string.digits
+    return ''.join(random.choice(chars) for _ in range(length))
 
-# Extraer características de una contraseña
-def extraer_caracteristicas(password):
-    return [
-        len(password),
-        sum(c.isupper() for c in password),
-        sum(c.isdigit() for c in password),
-        sum(c in string.punctuation for c in password)
-    ]
+# Sección de bienvenida con animación
+st.markdown('<h1 class="title">🔐 Bienvenido a Password AI 🔐</h1>', unsafe_allow_html=True)
 
-# Función para analizar seguridad de la contraseña
-def analizar_contrasena(password):
-    features = extraer_caracteristicas(password)
-    score = (
-        (features[0] / 16) * 0.4 +  # Longitud (40%)
-        (features[1] / 4) * 0.2 +   # Mayúsculas (20%)
-        (features[2] / 4) * 0.2 +   # Números (20%)
-        (features[3] / 4) * 0.2     # Símbolos (20%)
-    ) * 100
-    return min(score, 100)  # Límite máximo de 100%
-
-# Graficar análisis de la contraseña
-def graficar_contrasena(password):
-    features = extraer_caracteristicas(password)
-    labels = ["Longitud", "Mayúsculas", "Números", "Símbolos"]
-    
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.bar(labels, features, color=['#FF5733', '#33FF57', '#3357FF', '#FF33A1'])
-    ax.set_ylim(0, max(features) + 2)
-    ax.set_title("Características de la Contraseña")
-    st.pyplot(fig)
-
-# Menú lateral interactivo
-st.sidebar.title("🔐 WildPassPro")
-opcion = st.sidebar.radio("Navegación", ["Inicio", "Generador", "Analizador"])
-
-# Sección de bienvenida
-if opcion == "Inicio":
-    st.title("Bienvenido a WildPassPro 🔥")
-    st.write("""
-    **WildPassPro** es una herramienta avanzada para generar y analizar contraseñas con inteligencia artificial.
-    """)
-    st.image("https://source.unsplash.com/800x400/?password,security", use_column_width=True)
+# Tablero de palabras rotativas
+rotating_words = ["🔒 Seguridad", "🔑 Contraseñas", "🤖 Inteligencia Artificial", "💡 Protección", "📊 Análisis"]
+st.markdown(f'<p class="rotating-text">{random.choice(rotating_words)}</p>', unsafe_allow_html=True)
 
 # Sección de generación de contraseñas
-elif opcion == "Generador":
-    st.title("🔑 Generador de Contraseñas")
-    nivel = st.selectbox("Selecciona el nivel de seguridad", ["Baja", "Media", "Alta"])
-    longitud = st.slider("Longitud de la contraseña", 6, 20, 12)
-    
-    if st.button("Generar Contraseña"):
-        nueva_contrasena = generar_contrasena(longitud, nivel.lower())
-        st.success(f"✅ Tu contraseña generada: **{nueva_contrasena}**")
-        graficar_contrasena(nueva_contrasena)
+st.sidebar.title("📌 Menú")
+menu_option = st.sidebar.radio("Selecciona una opción:", ["Inicio", "Generar Contraseña", "Analizar Seguridad"])
 
-# Sección de análisis de contraseñas
-elif opcion == "Analizador":
-    st.title("🛡️ Analizador de Contraseñas")
-    password = st.text_input("Ingresa tu contraseña para analizarla", type="password")
+if menu_option == "Generar Contraseña":
+    st.subheader("🛠️ Generador de Contraseñas")
+    length = st.slider("Selecciona la longitud:", 6, 20, 12)
+    strong = st.checkbox("¿Contraseña segura?", True)
     
-    if password:
-        seguridad = analizar_contrasena(password)
-        st.subheader(f"🔍 Nivel de Seguridad: {seguridad:.2f}%")
+    if st.button("Generar"):
+        password = generate_password(length, strong)
+        st.success(f"Tu contraseña generada es: `{password}`")
         
-        if seguridad > 80:
-            st.success("✅ ¡Esta contraseña es muy segura!")
-        elif seguridad > 50:
-            st.warning("⚠️ Esta contraseña es medianamente segura.")
-        else:
-            st.error("❌ Esta contraseña es débil. Te recomendamos mejorarla.")
+        # Análisis básico visual
+        fig, ax = plt.subplots()
+        sns.barplot(x=["Longitud", "Mayúsculas", "Dígitos", "Símbolos"],
+                    y=[len(password), sum(c.isupper() for c in password), sum(c.isdigit() for c in password),
+                       sum(c in string.punctuation for c in password)], palette="viridis", ax=ax)
+        ax.set_title("Características de la Contraseña")
+        st.pyplot(fig)
 
-        graficar_contrasena(password)
+elif menu_option == "Analizar Seguridad":
+    st.subheader("🔍 Analizador de Seguridad")
+    password_input = st.text_input("Introduce tu contraseña:")
+    
+    if st.button("Analizar"):
+        if password_input:
+            score = sum([len(password_input) >= 8, any(c.isupper() for c in password_input),
+                         any(c.isdigit() for c in password_input), any(c in string.punctuation for c in password_input)])
+            st.info(f"🔎 Seguridad de la contraseña: {['Muy Débil', 'Débil', 'Media', 'Fuerte', 'Muy Fuerte'][score]}")
+            
+            # Gráfica de análisis
+            fig, ax = plt.subplots()
+            sns.barplot(x=["Longitud", "Mayúsculas", "Dígitos", "Símbolos"],
+                        y=[len(password_input), sum(c.isupper() for c in password_input), sum(c.isdigit() for c in password_input),
+                           sum(c in string.punctuation for c in password_input)], palette="magma", ax=ax)
+            ax.set_title("Análisis de Seguridad")
+            st.pyplot(fig)
+        else:
+            st.warning("⚠️ Ingresa una contraseña para analizar.")
+
+else:
+    st.write("💡 Usa el menú para generar o analizar contraseñas.")
+
+# Pie de página
+st.markdown("<br><br><center>🔥 Desarrollado con ❤️ por Password AI</center>", unsafe_allow_html=True)
