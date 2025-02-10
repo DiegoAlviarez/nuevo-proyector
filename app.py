@@ -1,125 +1,116 @@
 import streamlit as st
-import pandas as pd
 import numpy as np
-import tensorflow as tf
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
-import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+import seaborn as sns
+import joblib
+import random
+import string
+from collections import Counter
 
-st.set_page_config(page_title="FIFA 21 Neural Network Analysis", layout="wide")
+# Estilos personalizados para Streamlit
+st.set_page_config(
+    page_title="WildPassPro - Seguridad de Contraseñas",
+    page_icon="🔐",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-st.title("🧠 FIFA 21 Neural Network Analysis")
+# Establecer fondo personalizado con CSS
+page_bg_img = """
+<style>
+    body {
+        background-image: url("https://source.unsplash.com/1600x900/?technology,security");
+        background-size: cover;
+    }
+    .stApp {
+        background: rgba(255, 255, 255, 0.8);
+        padding: 2rem;
+        border-radius: 10px;
+    }
+    h1 {
+        color: #333;
+    }
+</style>
+"""
+st.markdown(page_bg_img, unsafe_allow_html=True)
 
-@st.cache_data
-def load_data():
-    url = "https://raw.githubusercontent.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/main/FIFA-21%20Complete.csv"
-    df = pd.read_csv(url)
-    return df
+# Función para generar contraseñas aleatorias
+def generar_contrasena(longitud=12, nivel="media"):
+    caracteres = string.ascii_letters
+    if nivel == "alta":
+        caracteres += string.digits + string.punctuation
+    elif nivel == "media":
+        caracteres += string.digits
+    return "".join(random.choice(caracteres) for _ in range(longitud))
 
-@st.cache_resource
-def preprocess_and_train(df, epochs, batch_size):
-    # Selección de características y objetivo
-    features = ['Age', 'Pace', 'Shooting', 'Passing', 'Dribbling', 'Defending', 'Physic']
-    target = 'Overall'
+# Extraer características de una contraseña
+def extraer_caracteristicas(password):
+    return [
+        len(password),
+        sum(c.isupper() for c in password),
+        sum(c.isdigit() for c in password),
+        sum(c in string.punctuation for c in password)
+    ]
+
+# Función para analizar seguridad de la contraseña
+def analizar_contrasena(password):
+    features = extraer_caracteristicas(password)
+    score = (
+        (features[0] / 16) * 0.4 +  # Longitud (40%)
+        (features[1] / 4) * 0.2 +   # Mayúsculas (20%)
+        (features[2] / 4) * 0.2 +   # Números (20%)
+        (features[3] / 4) * 0.2     # Símbolos (20%)
+    ) * 100
+    return min(score, 100)  # Límite máximo de 100%
+
+# Graficar análisis de la contraseña
+def graficar_contrasena(password):
+    features = extraer_caracteristicas(password)
+    labels = ["Longitud", "Mayúsculas", "Números", "Símbolos"]
     
-    X = df[features].values
-    y = df[target].values
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.bar(labels, features, color=['#FF5733', '#33FF57', '#3357FF', '#FF33A1'])
+    ax.set_ylim(0, max(features) + 2)
+    ax.set_title("Características de la Contraseña")
+    st.pyplot(fig)
+
+# Menú lateral interactivo
+st.sidebar.title("🔐 WildPassPro")
+opcion = st.sidebar.radio("Navegación", ["Inicio", "Generador", "Analizador"])
+
+# Sección de bienvenida
+if opcion == "Inicio":
+    st.title("Bienvenido a WildPassPro 🔥")
+    st.write("""
+    **WildPassPro** es una herramienta avanzada para generar y analizar contraseñas con inteligencia artificial.
+    """)
+    st.image("https://source.unsplash.com/800x400/?password,security", use_column_width=True)
+
+# Sección de generación de contraseñas
+elif opcion == "Generador":
+    st.title("🔑 Generador de Contraseñas")
+    nivel = st.selectbox("Selecciona el nivel de seguridad", ["Baja", "Media", "Alta"])
+    longitud = st.slider("Longitud de la contraseña", 6, 20, 12)
     
-    # Escalar características
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    if st.button("Generar Contraseña"):
+        nueva_contrasena = generar_contrasena(longitud, nivel.lower())
+        st.success(f"✅ Tu contraseña generada: **{nueva_contrasena}**")
+        graficar_contrasena(nueva_contrasena)
 
-    # Dividir en conjunto de entrenamiento y prueba
-    X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
-
-    # Crear modelo
-    model = tf.keras.Sequential([
-        tf.keras.layers.Dense(64, activation='relu', input_shape=(7,)),
-        tf.keras.layers.Dense(32, activation='relu'),
-        tf.keras.layers.Dense(16, activation='relu'),
-        tf.keras.layers.Dense(1)
-    ])
+# Sección de análisis de contraseñas
+elif opcion == "Analizador":
+    st.title("🛡️ Analizador de Contraseñas")
+    password = st.text_input("Ingresa tu contraseña para analizarla", type="password")
     
-    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
-
-    # Entrenar modelo
-    history = model.fit(
-        X_train, y_train,
-        validation_split=0.2,
-        epochs=epochs,
-        batch_size=batch_size,
-        verbose=0
-    )
-    
-    return model, scaler, history, X_test, y_test
-
-# Cargar datos
-with st.spinner("Loading FIFA 21 dataset..."):
-    df = load_data()
-    st.success("Dataset loaded successfully!")
-
-# Configuración de entrenamiento
-epochs = st.slider("Number of epochs", min_value=10, max_value=200, value=100, step=10)
-batch_size = st.select_slider("Batch size", options=[16, 32, 64, 128], value=32)
-
-# Entrenar modelo
-if st.button("Start Training"):
-    with st.spinner("Training model..."):
-        model, scaler, history, X_test, y_test = preprocess_and_train(df, epochs, batch_size)
-
-    # Graficar la pérdida
-    train_loss_history = history.history['loss']
-    val_loss_history = history.history['val_loss']
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=list(range(1, epochs+1)), y=train_loss_history, mode='lines', name='Training Loss'))
-    fig.add_trace(go.Scatter(x=list(range(1, epochs+1)), y=val_loss_history, mode='lines', name='Validation Loss'))
-    fig.update_layout(title="Training Progress", xaxis_title="Epoch", yaxis_title="Loss", height=400)
-    
-    st.plotly_chart(fig, use_container_width=True)
-    st.success("Training completed!")
-
-    # Evaluación del modelo
-    test_loss = model.evaluate(X_test, y_test, verbose=0)
-    st.metric("Test Mean Squared Error", f"{test_loss[0]:.4f}")
-
-    # Análisis de importancia de características
-    st.subheader("Feature Importance Analysis")
-    feature_names = ['Age', 'Pace', 'Shooting', 'Passing', 'Dribbling', 'Defending', 'Physic']
-    weights = model.layers[0].get_weights()[0]
-    importance = np.abs(weights).mean(axis=1)
-
-    fig = go.Figure(go.Bar(x=feature_names, y=importance, text=np.round(importance, 3), textposition='auto'))
-    fig.update_layout(title="Feature Importance", xaxis_title="Features", yaxis_title="Importance Score", height=400)
-    st.plotly_chart(fig, use_container_width=True)
-
-# Interfaz de predicción
-st.subheader("Player Rating Prediction")
-col1, col2 = st.columns(2)
-
-with col1:
-    age = st.number_input("Age", min_value=15, max_value=45, value=25)
-    pace = st.number_input("Pace", min_value=0, max_value=100, value=70)
-    shooting = st.number_input("Shooting", min_value=0, max_value=100, value=70)
-    passing = st.number_input("Passing", min_value=0, max_value=100, value=70)
-
-with col2:
-    dribbling = st.number_input("Dribbling", min_value=0, max_value=100, value=70)
-    defending = st.number_input("Defending", min_value=0, max_value=100, value=70)
-    physic = st.number_input("Physic", min_value=0, max_value=100, value=70)
-
-if st.button("Predict Rating"):
-    # Validar que el modelo esté entrenado
-    try:
-        model, scaler, _, _, _ = preprocess_and_train(df, epochs, batch_size)
+    if password:
+        seguridad = analizar_contrasena(password)
+        st.subheader(f"🔍 Nivel de Seguridad: {seguridad:.2f}%")
         
-        # Crear input normalizado
-        input_data = np.array([[age, pace, shooting, passing, dribbling, defending, physic]])
-        input_scaled = scaler.transform(input_data)
+        if seguridad > 80:
+            st.success("✅ ¡Esta contraseña es muy segura!")
+        elif seguridad > 50:
+            st.warning("⚠️ Esta contraseña es medianamente segura.")
+        else:
+            st.error("❌ Esta contraseña es débil. Te recomendamos mejorarla.")
 
-        # Realizar predicción
-        prediction = model.predict(input_scaled)[0][0]
-        st.metric("Predicted Overall Rating", f"{prediction:.1f}")
-    
-    except Exception as e:
-        st.error(f"Model has not been trained yet. Please start training first. Error: {str(e)}")
+        graficar_contrasena(password)
