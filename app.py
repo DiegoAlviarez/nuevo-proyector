@@ -6,7 +6,7 @@ from datetime import datetime
 
 # Configuración de API (¡NUNCA expongas esto en tu código!)
 API_KEY = "sk-9815428384464ad394db0391a8e3a33c"  # ← Configura esto en tus variables de entorno
-API_URL = "https://api.deepseek.com/v1/completions"  # Alternativa  # Ejemplo, verifica la URL real
+API_URL = "https://chat.deepseek.com"  # Alternativa  # Ejemplo, verifica la URL real
 
 # Configuración inicial
 SECURE_FOLDER = "secure_vault"
