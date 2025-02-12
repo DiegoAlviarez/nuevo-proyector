@@ -25,7 +25,7 @@ def chat_with_groq(messages):
         return f"Error: {str(e)}"
 
 def main():
-    st.title("🤖 Chatbot con Groq y Llama 3")
+    st.title("🤖 Chatbot de prueba para WildPassPro")
 
     if "messages" not in st.session_state:
         st.session_state.messages = [
