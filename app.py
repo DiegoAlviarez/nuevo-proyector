@@ -1,58 +1,54 @@
 import streamlit as st
-import requests
-import json
+import openai
+import os
 
-# Configuración de la API de Groq
-GROQ_API_URL = "https://api.groq.com/v1/chat/completions"  # URL de la API de Groq
-GROQ_API_KEY = "tu_api_key_de_groq"  # Reemplaza con tu API key de Groq
-MODEL_NAME = "llama-3.3-70b-versatile"  # Nombre del modelo de Groq
+client = openai.OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=os.environ.get("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")
+)
 
-# Función para interactuar con Groq
-def chat_with_groq(prompt):
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "model": MODEL_NAME,
-        "messages": [{"role": "user", "content": prompt}]
-    }
-    
-    response = requests.post(GROQ_API_URL, headers=headers, data=json.dumps(data))
-    
-    if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"]
-    else:
-        return f"Error: {response.status_code}, {response.text}"
+MODEL_NAME = "llama3-70b-8192"  # Modelo actualizado (ver modelos disponibles en Groq)
 
-# Interfaz de usuario en Streamlit
+def chat_with_groq(messages):
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=messages,
+            temperature=0.5,
+            max_tokens=1024
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        return f"Error: {str(e)}"
+
 def main():
-    st.title("Chatbot con Groq y LLaMA 3.3-70b en Streamlit")
+    st.title("🤖 Chatbot con Groq y Llama 3")
     
-    # Inicializar el historial del chat
+    # Inicializar historial de chat
     if "messages" not in st.session_state:
-        st.session_state.messages = []
+        st.session_state.messages = [
+            {"role": "assistant", "content": "¡Hola! Soy un chatbot impulsado por Llama 3 en Groq. ¿En qué puedo ayudarte?"}
+        ]
     
-    # Mostrar el historial del chat
+    # Mostrar historial de mensajes
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
     
-    # Entrada del usuario
-    if prompt := st.chat_input("¿Qué quieres preguntar?"):
-        # Añadir el mensaje del usuario al historial
+    # Manejar entrada de usuario
+    if prompt := st.chat_input("Escribe tu mensaje..."):
+        # Añadir mensaje de usuario
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
         
-        # Obtener la respuesta del chatbot
-        response = chat_with_groq(prompt)
+        # Obtener respuesta
+        with st.spinner("Pensando..."):
+            response = chat_with_groq(st.session_state.messages)
         
-        # Añadir la respuesta del chatbot al historial
+        # Añadir respuesta del asistente
         st.session_state.messages.append({"role": "assistant", "content": response})
-        with st.chat_message("assistant"):
-            st.markdown(response)
+        
+        # Actualizar la interfaz
+        st.rerun()
 
 if __name__ == "__main__":
     main()
