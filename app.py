@@ -29,7 +29,7 @@ def main():
 
     if "messages" not in st.session_state:
         st.session_state.messages = [
-            {"role": "assistant", "content": "¡Hola! Soy un chatbot impulsado por Llama 3 en Groq. ¿En qué puedo ayudarte?"}
+            {"role": "assistant", "content": "¡Hola! Soy un chatbot de prueba para WildPassPro si Diego lo lograste funciona"}
         ]
 
     for message in st.session_state.messages:
