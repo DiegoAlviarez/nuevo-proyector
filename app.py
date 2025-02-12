@@ -4,7 +4,7 @@ import os
 
 client = openai.OpenAI(
     base_url="https://api.groq.com/openai/v1",
-    export GROQ_API_KEY="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"
+    export GROQ_API_KEY= "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"
 )
 
 MODEL_NAME = "llama3-70b-8192"  # Modelo actualizado (ver modelos disponibles en Groq)
