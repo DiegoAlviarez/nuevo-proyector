@@ -20,7 +20,7 @@ client = openai.OpenAI(
     api_key=GROQ_API_KEY
 )
 
-# ========== FUNCIONES NUEVAS (GENERADORES) ==========
+# ========== FUNCIONES GENERADORES ==========
 def generate_secure_password(length=16):
     characters = string.ascii_letters + string.digits + "!@#$%^&*()"
     return ''.join(secrets.choice(characters) for _ in range(length))
@@ -28,7 +28,7 @@ def generate_secure_password(length=16):
 def generate_access_key():
     return secrets.token_urlsafe(32)
 
-# ========== FUNCIONES EXISTENTES ==========
+# ========== FUNCIONES DE SEGURIDAD ==========
 def load_weak_passwords(url):
     response = requests.get(url)
     return set(line.strip().lower() for line in response.text.splitlines() if line.strip())
@@ -73,74 +73,67 @@ def groq_analysis(password):
     except Exception as e:
         return f"**Error:** {str(e)}"
 
+# ========== INTERFAZ PRINCIPAL ==========
 def main():
-    # ========== ESTILOS PERSONALIZADOS ==========
+    # Configurar estilos CSS
     st.markdown(f"""
     <style>
-        /* Fondo animado */
         .stApp {{
-            background: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)),
+            background: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)),
                         url('https://raw.githubusercontent.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/main/secuencia-vector-diseno-codigo-binario_53876-164420.png');
             background-size: cover;
             background-attachment: fixed;
             animation: fadeIn 1.5s ease-in;
         }}
         
-        /* Animaciones */
         @keyframes fadeIn {{
             0% {{ opacity: 0; }}
             100% {{ opacity: 1; }}
         }}
         
-        /* Tarjetas interactivas */
         .stExpander > div {{
-            background: rgba(18, 25, 38, 0.9) !important;
-            backdrop-filter: blur(10px);
+            background: rgba(18, 25, 38, 0.95) !important;
+            backdrop-filter: blur(12px);
             border-radius: 15px;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid rgba(0, 168, 255, 0.3);
             transition: all 0.3s ease;
         }}
         
         .stExpander > div:hover {{
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,150,255,0.15);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,150,255,0.2);
         }}
         
-        /* Botones animados */
         .stButton > button {{
             transition: all 0.3s !important;
             border: 1px solid #00a8ff !important;
         }}
         
         .stButton > button:hover {{
-            transform: scale(1.05);
-            background: rgba(0,168,255,0.1) !important;
+            transform: scale(1.03);
+            background: rgba(0,168,255,0.15) !important;
         }}
         
-        /* Efecto de escritura en el chatbot */
         .chat-message {{
-            animation: slideIn 0.5s ease-out;
+            animation: slideIn 0.4s ease-out;
         }}
         
         @keyframes slideIn {{
-            0% {{ transform: translateX(20px); opacity: 0; }}
+            0% {{ transform: translateX(15px); opacity: 0; }}
             100% {{ transform: translateX(0); opacity: 1; }}
         }}
         
-        /* Texto brillante */
         h1, h2, h3 {{
-            text-shadow: 0 0 10px rgba(0,168,255,0.4);
+            text-shadow: 0 0 12px rgba(0,168,255,0.5);
         }}
         
-        /* Barras de progreso personalizadas */
         .stProgress > div > div {{
             background: linear-gradient(90deg, #00a8ff, #00ff88);
+            border-radius: 3px;
         }}
     </style>
     """, unsafe_allow_html=True)
 
-# ========== INTERFAZ PRINCIPAL ==========
-def main():
     st.title("🔐 WildPassPro - Suite de Seguridad")
     
     # Sección de generadores
@@ -149,18 +142,18 @@ def main():
         
         with col1:
             st.subheader("🔑 Generar Contraseña")
-            pwd_length = st.slider("Longitud", 12, 32, 16)
-            if st.button("Generar Contraseña"):
+            pwd_length = st.slider("Longitud", 12, 32, 16, key="pwd_length")
+            if st.button("Generar Contraseña", key="gen_pwd"):
                 secure_pwd = generate_secure_password(pwd_length)
                 st.code(secure_pwd, language="text")
                 
         with col2:
             st.subheader("🔑 Generar Llave de Acceso")
-            if st.button("Generar Llave"):
+            if st.button("Generar Llave", key="gen_key"):
                 access_key = generate_access_key()
                 st.code(access_key, language="text")
 
-    # Sección de análisis de contraseñas
+    # Sección de análisis
     with st.expander("🔍 Analizar Contraseña", expanded=True):
         password = st.text_input("Ingresa tu contraseña:", type="password", key="pwd_input")
         
@@ -184,7 +177,7 @@ def main():
                 analysis = groq_analysis(password)
                 st.markdown(analysis)
 
-    # Sección de Chatbot (existente)
+    # Chatbot
     st.divider()
     st.subheader("💬 Asistente de Seguridad")
     
