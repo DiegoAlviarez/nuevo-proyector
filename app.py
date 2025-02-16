@@ -7,7 +7,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import tensorflow as tf
 import joblib
-import io
 
 # 1. Función para descargar y limpiar el dataset rockyou.txt
 def download_and_clean_rockyou(url):
