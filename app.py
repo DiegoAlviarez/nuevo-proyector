@@ -18,7 +18,7 @@ client = openai.OpenAI(
     api_key=GROQ_API_KEY
 )
 
-# Funciones de procesamiento
+# Funciones clave
 def download_and_clean_rockyou(url):
     response = requests.get(url)
     if response.status_code != 200:
@@ -52,8 +52,11 @@ def build_model(input_dim):
     model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
     return model
 
-# Funciones de análisis mejoradas
-def analyze_with_groq(password):
+def full_analysis(password):
+    # ========== ANÁLISIS VISUAL ==========
+    st.subheader("🔍 Análisis Detallado")
+    
+    # Gráfico de criterios básicos
     criteria = {
         "length": len(password) >= 12,
         "upper": any(c.isupper() for c in password),
@@ -62,110 +65,86 @@ def analyze_with_groq(password):
         "special": any(c in "!@#$%^&*()" for c in password)
     }
     
-    # Gráfico de criterios
-    st.subheader("📊 Criterios de Seguridad")
     chart_data = pd.DataFrame({
         "Criterio": ["Longitud (12+)", "Mayúsculas", "Minúsculas", "Números", "Símbolos"],
         "Cumple": list(criteria.values())
     })
-    st.bar_chart(chart_data, x="Criterio", color=["#FF4B4B", "#00FF00"])
-
-    # Análisis textual con Groq
+    
+    st.bar_chart(chart_data, x="Criterio", color="#FF4B4B",
+                use_container_width=True, height=300)
+    
+    # ========== ANÁLISIS GROQ ==========
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{
                 "role": "user",
-                "content": f"""Analiza esta contraseña como experto: '{password}'. Evalúa:
-                1. Longitud adecuada (12+ caracteres)
-                2. Complejidad (mezcla de caracteres)
-                3. Patrones predecibles
-                4. Entropía estimada
-                Devuelve el análisis en markdown con emojis."""
+                "content": f"""Analiza esta contraseña como experto en seguridad: '{password}'
+                - Longitud actual: {len(password)} caracteres
+                - Complejidad de caracteres
+                - Patrones detectados
+                - Comparación con bases de datos de contraseñas débiles
+                - Entropía estimada
+                Devuelve el análisis en markdown con emojis y puntos clave."""
             }],
-            temperature=0.3,
+            temperature=0.4,
             max_tokens=400
         )
-        return response.choices[0].message.content
+        st.subheader("📝 Evaluación de Groq")
+        st.markdown(response.choices[0].message.content)
+        
     except Exception as e:
-        return f"Error en análisis: {str(e)}"
+        st.error(f"Error en análisis Groq: {str(e)}")
 
-# Interfaz de Streamlit
+# Interfaz principal
 def main():
-    st.title("🔒 WildPassPro - Auditoría de Contraseñas")
+    st.title("🔐 WildPassPro - Analizador Profesional")
     
     # Sección de análisis
     with st.expander("🔑 Analizar Contraseña", expanded=True):
         rockyou_url = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/rockyou.txt"
         
-        if st.button("🔄 Cargar Modelo de Seguridad"):
+        if st.button("🔄 Cargar Modelo de Seguridad", type="primary"):
             with st.spinner("Procesando 14M de contraseñas..."):
-                df = download_and_clean_rockyou(rockyou_url)
-                X, y, tokenizer, le = preprocess_data(df)
-                X_train, _, y_train, _ = train_test_split(X, y, test_size=0.2)
-                
-                model = build_model(len(tokenizer.word_index) + 1)
-                model.fit(X_train, y_train, epochs=1, batch_size=64, verbose=0)
-                model.save("password_model.h5")
-                joblib.dump(tokenizer, "tokenizer.pkl")
-                st.success("¡Modelo listo!")
+                try:
+                    df = download_and_clean_rockyou(rockyou_url)
+                    X, y, tokenizer, le = preprocess_data(df)
+                    X_train, _, y_train, _ = train_test_split(X, y, test_size=0.2)
+                    
+                    model = build_model(len(tokenizer.word_index) + 1)
+                    model.fit(X_train, y_train, epochs=2, batch_size=128, verbose=0)
+                    model.save("password_model.h5")
+                    joblib.dump(tokenizer, "tokenizer.pkl")
+                    st.success("¡Modelo cargado correctamente!")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
 
-        password = st.text_input("Ingresa tu contraseña:", type="password")
+        password = st.text_input("Ingresa tu contraseña:", type="password", key="pwd_input")
         
         if password:
             try:
-                # Análisis con modelo
+                # Carga del modelo
                 model = tf.keras.models.load_model("password_model.h5")
                 tokenizer = joblib.load("tokenizer.pkl")
                 
+                # Predicción del modelo
                 sequence = tokenizer.texts_to_sequences([password])
                 padded = tf.keras.preprocessing.sequence.pad_sequences(sequence, maxlen=20)
                 prediction = model.predict(padded, verbose=0)[0][0]
-                strength = "DÉBIL 🔴" if prediction > 0.5 else "FUERTE 🟢"
-                confidence = prediction if strength == "DÉBIL 🔴" else 1 - prediction
                 
-                # Mostrar resultados
-                col1, col2 = st.columns(2)
+                # Resultado principal
+                col1, col2 = st.columns([1, 2])
                 with col1:
                     st.subheader("🤖 Modelo RockYou")
+                    strength = "DÉBIL 🔴" if prediction > 0.7 else "MEDIA 🟡" if prediction > 0.4 else "FUERTE 🟢"
                     st.metric("Resultado", strength)
-                    st.progress(confidence)
+                    st.progress(prediction if strength == "DÉBIL 🔴" else 1 - prediction)
                     
                 with col2:
-                    groq_analysis = analyze_with_groq(password)
-                    st.subheader("🧠 Análisis Avanzado")
-                    st.markdown(groq_analysis)
+                    full_analysis(password)
                     
             except Exception as e:
                 st.error("Primero carga el modelo con el botón superior")
-
-    # Sección de chat
-    st.divider()
-    st.subheader("💬 Asistente de Seguridad")
-    
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = [{"role": "assistant", "content": "¡Hola! Soy tu experto en ciberseguridad. Pregúntame sobre contraseñas seguras."}]
-
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-
-    if prompt := st.chat_input("Escribe tu pregunta..."):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        
-        with st.spinner("Analizando..."):
-            response = client.chat.completions.create(
-                model=MODEL_NAME,
-                messages=[{
-                    "role": "system",
-                    "content": "Eres un experto en seguridad de contraseñas. Responde solo sobre: creación, protección, almacenamiento y mejores prácticas de contraseñas. Si la pregunta no es del tema, di: 'Pregúntame sobre seguridad de contraseñas'"
-                }] + st.session_state.chat_history[-3:],
-                temperature=0.4,
-                max_tokens=300
-            ).choices[0].message.content
-            
-        st.session_state.chat_history.append({"role": "assistant", "content": response})
-        st.rerun()
 
 if __name__ == "__main__":
     main()
