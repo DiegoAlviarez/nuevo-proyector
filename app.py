@@ -54,9 +54,8 @@ def build_model(input_dim):
 
 def full_analysis(password):
     # ========== ANÁLISIS VISUAL ==========
-    st.subheader("🔍 Análisis Detallado")
+    st.subheader("📊 Criterios de Seguridad")
     
-    # Gráfico de criterios básicos
     criteria = {
         "length": len(password) >= 12,
         "upper": any(c.isupper() for c in password),
@@ -70,27 +69,25 @@ def full_analysis(password):
         "Cumple": list(criteria.values())
     })
     
-    st.bar_chart(chart_data, x="Criterio", color="#FF4B4B",
-                use_container_width=True, height=300)
-    
+    st.bar_chart(chart_data, x="Criterio", color="#FF4B4B", height=300)
+
     # ========== ANÁLISIS GROQ ==========
     try:
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[{
                 "role": "user",
-                "content": f"""Analiza esta contraseña como experto en seguridad: '{password}'
-                - Longitud actual: {len(password)} caracteres
+                "content": f"""Analiza esta contraseña como experto: '{password}'
+                - Longitud: {len(password)}/12 caracteres
                 - Complejidad de caracteres
                 - Patrones detectados
-                - Comparación con bases de datos de contraseñas débiles
-                - Entropía estimada
-                Devuelve el análisis en markdown con emojis y puntos clave."""
+                - Comparación con bases de datos de leaks
+                Devuelve el análisis en markdown con emojis."""
             }],
             temperature=0.4,
             max_tokens=400
         )
-        st.subheader("📝 Evaluación de Groq")
+        st.subheader("🧠 Evaluación de Groq")
         st.markdown(response.choices[0].message.content)
         
     except Exception as e:
@@ -123,20 +120,19 @@ def main():
         
         if password:
             try:
-                # Carga del modelo
                 model = tf.keras.models.load_model("password_model.h5")
                 tokenizer = joblib.load("tokenizer.pkl")
                 
-                # Predicción del modelo
                 sequence = tokenizer.texts_to_sequences([password])
                 padded = tf.keras.preprocessing.sequence.pad_sequences(sequence, maxlen=20)
                 prediction = model.predict(padded, verbose=0)[0][0]
                 
-                # Resultado principal
+                # Resultado corregido (umbral ajustado)
+                strength = "DÉBIL 🔴" if prediction > 0.65 else "MEDIA 🟡" if prediction > 0.35 else "FUERTE 🟢"
+                
                 col1, col2 = st.columns([1, 2])
                 with col1:
                     st.subheader("🤖 Modelo RockYou")
-                    strength = "DÉBIL 🔴" if prediction > 0.7 else "MEDIA 🟡" if prediction > 0.4 else "FUERTE 🟢"
                     st.metric("Resultado", strength)
                     st.progress(prediction if strength == "DÉBIL 🔴" else 1 - prediction)
                     
@@ -145,6 +141,38 @@ def main():
                     
             except Exception as e:
                 st.error("Primero carga el modelo con el botón superior")
+
+    # ========== CHATBOT RESTAURADO ==========
+    st.divider()
+    st.subheader("💬 Asistente de Seguridad")
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [{"role": "assistant", "content": "¡Hola! Soy tu experto en seguridad. Pregúntame sobre contraseñas seguras."}]
+
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if prompt := st.chat_input("Escribe tu pregunta sobre contraseñas..."):
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        
+        with st.spinner("Analizando..."):
+            try:
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=[{
+                        "role": "system",
+                        "content": "Eres un experto en seguridad especializado en contraseñas. Responde solo sobre: creación segura, almacenamiento, recuperación y mejores prácticas. Si la pregunta es off-topic, responde: 'Soy especialista en contraseñas, ¿en qué más puedo ayudarte?'"
+                    }] + st.session_state.chat_history[-3:],
+                    temperature=0.3,
+                    max_tokens=300
+                ).choices[0].message.content
+                
+                st.session_state.chat_history.append({"role": "assistant", "content": response})
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error en el chatbot: {str(e)}")
 
 if __name__ == "__main__":
     main()
