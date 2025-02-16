@@ -18,58 +18,48 @@ client = openai.OpenAI(
     api_key=GROQ_API_KEY
 )
 
-# Funciones clave
-def download_and_clean_rockyou(url):
+# Cargar rockyou.txt como conjunto de contraseñas débiles
+def load_weak_passwords(url):
     response = requests.get(url)
-    if response.status_code != 200:
-        raise Exception(f"Error descargando archivo: {response.status_code}")
-    
-    lines = response.text.splitlines()
-    cleaned_data = [re.sub(r"[^a-zA-Z0-9]", "", line.strip()).lower() for line in lines if line.strip()]
-    return pd.DataFrame({"password": cleaned_data, "label": "weak"})
+    weak_passwords = set(line.strip().lower() for line in response.text.splitlines() if line.strip())
+    return weak_passwords
 
-def preprocess_data(df):
-    le = LabelEncoder()
-    df["label"] = le.fit_transform(df["label"])
-    
-    tokenizer = tf.keras.preprocessing.text.Tokenizer(num_words=5000)
-    tokenizer.fit_on_texts(df["password"])
-    sequences = tokenizer.texts_to_sequences(df["password"])
-    
-    X = tf.keras.preprocessing.sequence.pad_sequences(sequences, maxlen=20)
-    y = df["label"].values
-    
-    return X, y, tokenizer, le
+WEAK_PASSWORDS = load_weak_passwords("https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/rockyou.txt")
 
-def build_model(input_dim):
-    model = tf.keras.Sequential([
-        tf.keras.layers.Embedding(input_dim, 64, input_length=20),
-        tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(64)),
-        tf.keras.layers.Dense(64, activation="relu"),
-        tf.keras.layers.Dropout(0.5),
-        tf.keras.layers.Dense(1, activation="sigmoid")
-    ])
-    model.compile(loss="binary_crossentropy", optimizer="adam", metrics=["accuracy"])
-    return model
+# Funciones clave modificadas
+def is_weak_password(password):
+    # Reglas básicas de debilidad
+    rules = {
+        "all_lower": password.islower(),
+        "all_upper": password.isupper(),
+        "no_numbers": not any(c.isdigit() for c in password),
+        "no_symbols": not any(c in "!@#$%^&*()" for c in password),
+        "in_rockyou": password.lower() in WEAK_PASSWORDS
+    }
+    return any(rules.values())
 
 def full_analysis(password):
+    # ========== DETECCIÓN DE DEBILIDAD ==========
+    weak_reasons = []
+    if password.lower() in WEAK_PASSWORDS:
+        weak_reasons.append("Está en la lista rockyou.txt")
+    if password.islower():
+        weak_reasons.append("Solo minúsculas")
+    if not any(c.isdigit() for c in password):
+        weak_reasons.append("Sin números")
+    if not any(c in "!@#$%^&*()" for c in password):
+        weak_reasons.append("Sin símbolos")
+    
     # ========== ANÁLISIS VISUAL ==========
-    st.subheader("📊 Criterios de Seguridad")
-    
-    criteria = {
-        "length": len(password) >= 12,
-        "upper": any(c.isupper() for c in password),
-        "lower": any(c.islower() for c in password),
-        "digit": any(c.isdigit() for c in password),
-        "special": any(c in "!@#$%^&*()" for c in password)
-    }
-    
-    chart_data = pd.DataFrame({
-        "Criterio": ["Longitud (12+)", "Mayúsculas", "Minúsculas", "Números", "Símbolos"],
-        "Cumple": list(criteria.values())
-    })
-    
-    st.bar_chart(chart_data, x="Criterio", color="#FF4B4B", height=300)
+    st.subheader("📊 Detección de Debilidad")
+    if weak_reasons:
+        st.error("**Contraseña Débil** - Razones:")
+        for reason in weak_reasons:
+            st.write(f"❌ {reason}")
+        return "DÉBIL 🔴"
+    else:
+        st.success("**Contraseña Fuerte** - Cumple con los criterios básicos")
+        return "FUERTE 🟢"
 
     # ========== ANÁLISIS GROQ ==========
     try:
