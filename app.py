@@ -6,6 +6,8 @@ import requests
 import openai
 import joblib
 import tensorflow as tf
+import secrets
+import string
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
@@ -18,14 +20,21 @@ client = openai.OpenAI(
     api_key=GROQ_API_KEY
 )
 
-# Cargar contraseñas débiles
+# ========== FUNCIONES NUEVAS (GENERADORES) ==========
+def generate_secure_password(length=16):
+    characters = string.ascii_letters + string.digits + "!@#$%^&*()"
+    return ''.join(secrets.choice(characters) for _ in range(length))
+
+def generate_access_key():
+    return secrets.token_urlsafe(32)
+
+# ========== FUNCIONES EXISTENTES ==========
 def load_weak_passwords(url):
     response = requests.get(url)
     return set(line.strip().lower() for line in response.text.splitlines() if line.strip())
 
 WEAK_PASSWORDS = load_weak_passwords("https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/rockyou.txt")
 
-# Funciones clave mejoradas
 def detect_weakness(password):
     weaknesses = []
     password_lower = password.lower()
@@ -51,11 +60,11 @@ def groq_analysis(password):
             model=MODEL_NAME,
             messages=[{
                 "role": "user",
-                "content": f"""Analiza esta contraseña como experto en seguridad: '{password}'
-                - Detalla todas las vulnerabilidades encontradas
-                - Comparación con bases de datos de leaks
-                - Recomendaciones específicas
-                Formato: Lista con emojis en markdown"""
+                "content": f"""Analiza esta contraseña: '{password}'
+                1. Vulnerabilidades críticas
+                2. Comparación con patrones comunes
+                3. Recomendaciones personalizadas
+                Formato: Lista markdown con emojis"""
             }],
             temperature=0.4,
             max_tokens=400
@@ -64,23 +73,36 @@ def groq_analysis(password):
     except Exception as e:
         return f"**Error:** {str(e)}"
 
-# Interfaz principal actualizada
+# ========== INTERFAZ PRINCIPAL ==========
 def main():
-    st.title("🔐 WildPassPro - Analizador Profesional")
+    st.title("🔐 WildPassPro - Suite de Seguridad")
     
-    with st.expander("🔑 Analizar Contraseña", expanded=True):
+    # Sección de generadores
+    with st.expander("🛠️ Generadores Seguros", expanded=True):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("🔑 Generar Contraseña")
+            pwd_length = st.slider("Longitud", 12, 32, 16)
+            if st.button("Generar Contraseña"):
+                secure_pwd = generate_secure_password(pwd_length)
+                st.code(secure_pwd, language="text")
+                
+        with col2:
+            st.subheader("🔑 Generar Llave de Acceso")
+            if st.button("Generar Llave"):
+                access_key = generate_access_key()
+                st.code(access_key, language="text")
+
+    # Sección de análisis de contraseñas
+    with st.expander("🔍 Analizar Contraseña", expanded=True):
         password = st.text_input("Ingresa tu contraseña:", type="password", key="pwd_input")
         
         if password:
-            # Detección de debilidades
             weaknesses = detect_weakness(password)
-            
-            # Clasificación definitiva
             final_strength = "DÉBIL 🔴" if weaknesses else "FUERTE 🟢"
             
-            # Mostrar resultados
             col1, col2 = st.columns([1, 2])
-            
             with col1:
                 st.subheader("📋 Clasificación Final")
                 st.markdown(f"## {final_strength}")
@@ -89,12 +111,44 @@ def main():
                     for weakness in weaknesses:
                         st.write(weakness)
                 else:
-                    st.success("### Cumple con todos los criterios de seguridad")
+                    st.success("### Cumple con todos los criterios")
                     
             with col2:
-                st.subheader("🧠 Análisis Detallado de Groq")
+                st.subheader("🧠 Análisis de Groq")
                 analysis = groq_analysis(password)
                 st.markdown(analysis)
+
+    # Sección de Chatbot (existente)
+    st.divider()
+    st.subheader("💬 Asistente de Seguridad")
+    
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = [{"role": "assistant", "content": "¡Hola! Soy tu experto en seguridad. Pregúntame sobre:"}]
+
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if prompt := st.chat_input("Escribe tu pregunta..."):
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        
+        with st.spinner("Analizando..."):
+            try:
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=[{
+                        "role": "system",
+                        "content": "Eres un experto en seguridad especializado en gestión de credenciales. Responde solo sobre: contraseñas, llaves de acceso, 2FA, y mejores prácticas."
+                    }] + st.session_state.chat_history[-3:],
+                    temperature=0.3,
+                    max_tokens=300
+                ).choices[0].message.content
+                
+                st.session_state.chat_history.append({"role": "assistant", "content": response})
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error en el chatbot: {str(e)}")
 
 if __name__ == "__main__":
     main()
