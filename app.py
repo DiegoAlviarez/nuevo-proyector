@@ -11,6 +11,7 @@ import string
 import os
 import io
 import time
+import json
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from cryptography.fernet import Fernet
@@ -121,25 +122,42 @@ def groq_analysis(password):
         return f"**Error:** {str(e)}"
 
 # ========== FUNCIONES DE LA RED NEURONAL ==========
-def generar_dataset_groq(num_samples=1000):
+def generar_dataset_groq(num_samples=100):
     dataset = []
-    for _ in range(num_samples):
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{
-                "role": "user",
-                "content": """Genera una contraseña y clasifícala como 'débil', 'media' o 'fuerte'.
-                Devuelve el resultado en formato JSON: {"password": "contraseña", "label": "clasificación"}"""
-            }],
-            temperature=0.5,
-            max_tokens=100
-        )
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    for i in range(num_samples):
         try:
+            time.sleep(1.5)  # Delay para evitar rate limits
+            
+            response = client.chat.completions.create(
+                model=MODEL_NAME,
+                messages=[{
+                    "role": "user",
+                    "content": """Genera una contraseña y clasifícala como 'débil', 'media' o 'fuerte'.
+                    SOLO devuelve el JSON: {"password": "valor", "label": "clasificación"}"""
+                }],
+                temperature=0.5,
+                max_tokens=100
+            )
+            
             result = response.choices[0].message.content
-            result_json = eval(result)  # Convertir a diccionario
+            result = re.sub(r'[\x00-\x1F]+', '', result)  # Limpiar caracteres especiales
+            result_json = json.loads(result)
+            
             dataset.append([result_json["password"], result_json["label"]])
+            
+            progress = (i + 1) / num_samples
+            progress_bar.progress(progress)
+            status_text.text(f"Generando muestras: {i+1}/{num_samples}")
+            
         except Exception as e:
-            print(f"Error al procesar la respuesta de Groq: {e}")
+            st.error(f"Error en muestra {i}: {str(e)}")
+            continue
+    
+    progress_bar.empty()
+    status_text.empty()
     
     df = pd.DataFrame(dataset, columns=["password", "label"])
     df.to_csv("password_dataset.csv", index=False)
@@ -248,8 +266,8 @@ def main():
     
     # Verificar si el dataset ya existe
     if not os.path.exists("password_dataset.csv"):
-        st.info("Generando dataset con Groq...")
-        df = generar_dataset_groq(num_samples=1000)
+        with st.spinner("Generando dataset con Groq (esto puede tomar 2-3 mins)..."):
+            df = generar_dataset_groq(num_samples=100)  # Empieza con 100 muestras
     else:
         df = pd.read_csv("password_dataset.csv")
 
@@ -258,9 +276,9 @@ def main():
 
     # Verificar si el modelo ya está entrenado
     if not os.path.exists("password_strength_model.h5"):
-        st.info("Entrenando la red neuronal...")
-        model = crear_modelo()
-        model = entrenar_modelo(model, X, y)
+        with st.spinner("Entrenando la red neuronal..."):
+            model = crear_modelo()
+            model = entrenar_modelo(model, X, y)
     else:
         model = tf.keras.models.load_model("password_strength_model.h5")
 
@@ -367,6 +385,7 @@ def main():
                 st.subheader("🧠 Análisis de Groq")
                 analysis = groq_analysis(password)
                 st.markdown(analysis)
+
 
     with tab4:
         st.subheader("💬 Asistente de Seguridad")
