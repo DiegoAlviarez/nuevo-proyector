@@ -99,6 +99,10 @@ def detect_weakness(password):
         weaknesses.append("❌ Sin símbolos")
     if len(password) < 12:
         weaknesses.append(f"❌ Longitud insuficiente ({len(password)}/12)")
+    if password_lower in ["diego", "juan", "maria", "pedro"]:
+        weaknesses.append("❌ Contiene un nombre común")
+    if "123" in password or "abc" in password_lower:
+        weaknesses.append("❌ Contiene una secuencia simple")
         
     return weaknesses
 
