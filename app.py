@@ -99,9 +99,9 @@ def detect_weakness(password):
         weaknesses.append("❌ Sin símbolos")
     if len(password) < 12:
         weaknesses.append(f"❌ Longitud insuficiente ({len(password)}/12)")
-    if password_lower in ["diego", "juan", "maria", "pedro"]:
+    if password_lower in ["diego", "juan", "maria", "pedro", "media"]:
         weaknesses.append("❌ Contiene un nombre común")
-    if "123" in password or "abc" in password_lower:
+    if "123" in password or "abc" in password_lower or "809" in password:
         weaknesses.append("❌ Contiene una secuencia simple")
         
     return weaknesses
@@ -147,8 +147,8 @@ def predecir_fortaleza(model, password):
         int(any(c.isupper() for c in password)),
         int(any(c.isdigit() for c in password)),
         int(any(c in "!@#$%^&*()" for c in password)),
-        int(password.lower() in ["diego", "juan", "maria", "pedro"]),  # Nombres comunes
-        int("123" in password or "abc" in password.lower())  # Secuencias comunes
+        int(password.lower() in ["diego", "juan", "maria", "pedro", "media"]),  # Nombres comunes
+        int("123" in password or "abc" in password.lower() or "809" in password)  # Secuencias comunes
     ]).reshape(1, 6)  # Asegurarse de que tenga la forma correcta (1, 6)
     
     prediction = model.predict(features, verbose=0)
@@ -166,9 +166,9 @@ def explicar_fortaleza(password):
         explicaciones.append("✅ Contiene números")
     if any(c in "!@#$%^&*()" for c in password):
         explicaciones.append("✅ Contiene símbolos especiales")
-    if password.lower() in ["diego", "juan", "maria", "pedro"]:
+    if password.lower() in ["diego", "juan", "maria", "pedro", "media"]:
         explicaciones.append("❌ Contiene un nombre común")
-    if "123" in password or "abc" in password.lower():
+    if "123" in password or "abc" in password.lower() or "809" in password:
         explicaciones.append("❌ Contiene una secuencia simple")
     return explicaciones
 
@@ -179,8 +179,8 @@ def preprocesar_dataset(df):
         int(any(c.isupper() for c in row["password"])),
         int(any(c.isdigit() for c in row["password"])),
         int(any(c in "!@#$%^&*()" for c in row["password"])),
-        int(row["password"].lower() in ["diego", "juan", "maria", "pedro"]),  # Nombres comunes
-        int("123" in row["password"] or "abc" in row["password"].lower())  # Secuencias comunes
+        int(row["password"].lower() in ["diego", "juan", "maria", "pedro", "media"]),  # Nombres comunes
+        int("123" in row["password"] or "abc" in row["password"].lower() or "809" in row["password"])  # Secuencias comunes
     ] for _, row in df.iterrows()])
     y = df["strength"].values
     label_encoder = LabelEncoder()
