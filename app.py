@@ -159,6 +159,32 @@ def explicar_fortaleza(password):
         explicaciones.append("✅ Contiene símbolos especiales")
     return explicaciones
 
+# ========== GENERAR DATASET CON GROQ ==========
+def generar_dataset_groq(num_samples=100):
+    data = []
+    for _ in range(num_samples):
+        password = generate_secure_password()
+        weaknesses = detect_weakness(password)
+        strength = 0 if weaknesses else 2  # 0: débil, 2: fuerte
+        data.append([password, strength])
+    
+    df = pd.DataFrame(data, columns=["password", "strength"])
+    df.to_csv("password_dataset.csv", index=False)
+    return df
+
+# ========== PREPROCESAR DATASET ==========
+def preprocesar_dataset(df):
+    X = np.array([[
+        len(row["password"]),
+        int(any(c.isupper() for c in row["password"])),
+        int(any(c.isdigit() for c in row["password"])),
+        int(any(c in "!@#$%^&*()" for c in row["password"]))
+    ] for _, row in df.iterrows()])
+    y = df["strength"].values
+    label_encoder = LabelEncoder()
+    y = label_encoder.fit_transform(y)
+    return X, y, label_encoder
+
 # ========== GESTOR DE CONTRASEÑAS ==========
 def guardar_contraseña(sitio, usuario, contraseña):
     if not os.path.exists("passwords.json.encrypted"):
