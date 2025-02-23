@@ -345,6 +345,26 @@ def main():
     # Interfaz con pestañas
     tab1, tab2, tab3, tab4, tab5 = st.tabs(["🛠️ Generadores", "🔒 Bóveda", "🔍 Analizador", "💬 Chatbot", "🌐 Escáner Web"])
     
+    # ========== PESTAÑA 1: GENERADORES ==========
+    with tab1:
+        st.subheader("🛠️ Generadores")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("### 🔑 Generar Contraseña Segura")
+            password_length = st.slider("Longitud de la contraseña", 12, 32, 16)
+            if st.button("Generar Contraseña"):
+                secure_password = generate_secure_password(password_length)
+                st.success(f"**Contraseña generada:** `{secure_password}`")
+        
+        with col2:
+            st.markdown("### 🔑 Generar Llave de Acceso")
+            if st.button("Generar Llave de Acceso"):
+                access_key = generate_access_key()
+                st.success(f"**Llave de acceso generada:** `{access_key}`")
+    
+    # ========== PESTAÑA 2: BÓVEDA ==========
     with tab2:
         st.subheader("🔒 Bóveda de Contraseñas")
         
@@ -376,6 +396,82 @@ def main():
             else:
                 st.info("No hay contraseñas guardadas aún.")
     
+    # ========== PESTAÑA 3: ANALIZADOR ==========
+    with tab3:
+        st.subheader("🔍 Analizar Contraseña")
+        password = st.text_input("Ingresa tu contraseña:", type="password", key="pwd_input")
+        
+        if password:
+            weaknesses = detect_weakness(password)
+            final_strength = "DÉBIL 🔴" if weaknesses else "FUERTE 🟢"
+            
+            # Predicción de la red neuronal
+            strength_prediction = predecir_fortaleza(model, password)
+            strength_labels = ["DÉBIL 🔴", "MEDIA 🟡", "FUERTE 🟢"]
+            neural_strength = strength_labels[strength_prediction]
+            
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                st.subheader("📋 Clasificación Final")
+                st.markdown(f"## {final_strength}")
+                if weaknesses:
+                    st.error("### Razones de debilidad:")
+                    for weakness in weaknesses:
+                        st.write(weakness)
+                else:
+                    st.success("### Cumple con todos los criterios")
+                
+                st.subheader("🧠 Predicción de Red Neuronal")
+                st.markdown(f"## {neural_strength}")
+                
+                if strength_prediction == 2:  # Si es fuerte
+                    st.success("### Explicación de la fortaleza:")
+                    explicaciones = explicar_fortaleza(password)
+                    for explicacion in explicaciones:
+                        st.write(explicacion)
+                    
+            with col2:
+                st.subheader("🧠 Análisis de Groq")
+                analysis = groq_analysis(password)
+                st.markdown(analysis)
+    
+    # ========== PESTAÑA 4: CHATBOT ==========
+    with tab4:
+        st.subheader("💬 Asistente de Seguridad")
+        
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = [{"role": "assistant", "content": "¡Hola! Soy tu experto en seguridad. Pregúntame sobre:"}]
+
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        if prompt := st.chat_input("Escribe tu pregunta..."):
+            st.session_state.chat_history.append({"role": "user", "content": prompt})
+            
+            with st.spinner("Analizando..."):
+                try:
+                    response = client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=[{
+                            "role": "system",
+                            "content": "Eres un experto en seguridad especializado en gestión de credenciales. Responde solo sobre: contraseñas, llaves de acceso, 2FA, y mejores prácticas."
+                        }] + st.session_state.chat_history[-3:],
+                        temperature=0.3,
+                        max_tokens=300
+                    ).choices[0].message.content
+                    
+                    # Efecto máquina de escribir
+                    with st.chat_message("assistant"):
+                        typewriter_effect(response)
+                    
+                    st.session_state.chat_history.append({"role": "assistant", "content": response})
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"Error en el chatbot: {str(e)}")
+    
+    # ========== PESTAÑA 5: ESCÁNER WEB ==========
     with tab5:
         st.subheader("🌐 Escáner de Vulnerabilidades Web")
         
