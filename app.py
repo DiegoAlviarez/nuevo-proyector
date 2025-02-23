@@ -145,7 +145,8 @@ def predecir_fortaleza(model, password):
         int(any(c in "!@#$%^&*()" for c in password)),
         int(password.lower() in ["diego", "juan", "maria", "pedro"]),  # Nombres comunes
         int("123" in password or "abc" in password.lower())  # Secuencias comunes
-    ]).reshape(1, -1)
+    ]).reshape(1, 6)  # Asegurarse de que tenga la forma correcta (1, 6)
+    
     prediction = model.predict(features, verbose=0)
     return np.argmax(prediction)  # 0: débil, 1: media, 2: fuerte
 
