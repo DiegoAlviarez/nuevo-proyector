@@ -11,11 +11,12 @@ import string
 import os
 import io
 import time
-import hashlib
-import pyttsx3
+import json
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from cryptography.fernet import Fernet
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
 
 # Configuración de Groq
 GROQ_API_KEY = "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"
@@ -28,9 +29,8 @@ client = openai.OpenAI(
 
 # ========== NUEVAS CONSTANTES ==========
 MASTER_PASSWORD = "WildPassPro2024!"  # Contraseña maestra (cambiar en producción)
-TTS_ENGINE = pyttsx3.init()
 
-# ========== FUNCIONES DE SEGURIDAD MEJORADAS ==========
+# ========== FUNCIONES DE SEGURIDAD ==========
 def generar_clave_cifrado():
     if not os.path.exists("clave.key"):
         clave = Fernet.generate_key()
@@ -50,242 +50,323 @@ def cifrar_archivo(ruta_archivo):
     os.remove(ruta_archivo)
     return f"{ruta_archivo}.encrypted"
 
-def calcular_hash_archivo(ruta_archivo):
-    hasher = hashlib.sha256()
-    with open(ruta_archivo, 'rb') as f:
-        buf = f.read()
-        hasher.update(buf)
-    return hasher.hexdigest()
+def descifrar_archivo(ruta_archivo):
+    with open(ruta_archivo, "rb") as archivo:
+        datos_cifrados = archivo.read()
+    datos_descifrados = fernet.decrypt(datos_cifrados)
+    ruta_original = ruta_archivo.replace(".encrypted", "")
+    with open(ruta_original, "wb") as archivo_descifrado:
+        archivo_descifrado.write(datos_descifrados)
+    return ruta_original
 
+# ========== EFECTO MAQUINA DE ESCRIBIR ==========
+def typewriter_effect(text):
+    placeholder = st.empty()
+    displayed_text = ""
+    for char in text:
+        displayed_text += char
+        placeholder.markdown(f'<div class="chat-message">{displayed_text}</div>', unsafe_allow_html=True)
+        time.sleep(0.02)
+    return displayed_text
 
+# ========== FUNCIONES PRINCIPALES ==========
+def generate_secure_password(length=16):
+    characters = string.ascii_letters + string.digits + "!@#$%^&*()"
+    return ''.join(secrets.choice(characters) for _ in range(length))
 
-# ========== INTERFAZ PROFESIONAL MEJORADA ==========
-def aplicar_estilos_profesionales():
+def generate_access_key():
+    return secrets.token_urlsafe(32)
+
+def load_weak_passwords(url):
+    response = requests.get(url)
+    return set(line.strip().lower() for line in response.text.splitlines() if line.strip())
+
+WEAK_PASSWORDS = load_weak_passwords("https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/rockyou.txt")
+
+def detect_weakness(password):
+    weaknesses = []
+    password_lower = password.lower()
+    
+    if password_lower in WEAK_PASSWORDS:
+        weaknesses.append("❌ Está en la lista rockyou.txt")
+    if password.islower():
+        weaknesses.append("❌ Solo minúsculas")
+    if password.isupper():
+        weaknesses.append("❌ Solo mayúsculas")
+    if not any(c.isdigit() for c in password):
+        weaknesses.append("❌ Sin números")
+    if not any(c in "!@#$%^&*()" for c in password):
+        weaknesses.append("❌ Sin símbolos")
+    if len(password) < 12:
+        weaknesses.append(f"❌ Longitud insuficiente ({len(password)}/12)")
+        
+    return weaknesses
+
+def groq_analysis(password):
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{
+                "role": "user",
+                "content": f"""Analiza esta contraseña: '{password}'
+                1. Vulnerabilidades críticas
+                2. Comparación con patrones comunes
+                3. Recomendaciones personalizadas
+                Formato: Lista markdown con emojis"""
+            }],
+            temperature=0.4,
+            max_tokens=400
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"**Error:** {str(e)}"
+
+# ========== FUNCIONES DE LA RED NEURONAL ==========
+def crear_modelo():
+    model = Sequential([
+        Dense(32, activation='relu', input_shape=(4,)),  # Capa más pequeña
+        Dense(16, activation='relu'),  # Menos neuronas
+        Dense(3, activation='softmax')  # Capa de salida
+    ])
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
+    return model
+
+def entrenar_modelo(model, X, y):
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+    history = model.fit(X_train, y_train, epochs=5, batch_size=16, validation_data=(X_val, y_val), verbose=0)  # Menos épocas
+    model.save("password_strength_model.h5")
+    return model, history
+
+def predecir_fortaleza(model, password):
+    features = np.array([
+        len(password),
+        int(any(c.isupper() for c in password)),
+        int(any(c.isdigit() for c in password)),
+        int(any(c in "!@#$%^&*()" for c in password))
+    ]).reshape(1, -1)
+    prediction = model.predict(features, verbose=0)
+    return np.argmax(prediction)  # 0: débil, 1: media, 2: fuerte
+
+def explicar_fortaleza(password):
+    explicaciones = []
+    if len(password) >= 12:
+        explicaciones.append("✅ Longitud adecuada (más de 12 caracteres)")
+    if any(c.isupper() for c in password):
+        explicaciones.append("✅ Contiene mayúsculas")
+    if any(c.isdigit() for c in password):
+        explicaciones.append("✅ Contiene números")
+    if any(c in "!@#$%^&*()" for c in password):
+        explicaciones.append("✅ Contiene símbolos especiales")
+    return explicaciones
+
+# ========== GESTOR DE CONTRASEÑAS ==========
+def guardar_contraseña(sitio, usuario, contraseña):
+    if not os.path.exists("passwords.json.encrypted"):
+        with open("passwords.json", "w") as f:
+            json.dump([], f)
+        cifrar_archivo("passwords.json")
+    
+    descifrar_archivo("passwords.json.encrypted")
+    with open("passwords.json", "r") as f:
+        datos = json.load(f)
+    
+    datos.append({"sitio": sitio, "usuario": usuario, "contraseña": fernet.encrypt(contraseña.encode()).decode()})
+    
+    with open("passwords.json", "w") as f:
+        json.dump(datos, f)
+    
+    cifrar_archivo("passwords.json")
+
+def obtener_contraseñas():
+    if not os.path.exists("passwords.json.encrypted"):
+        return []
+    
+    descifrar_archivo("passwords.json.encrypted")
+    with open("passwords.json", "r") as f:
+        datos = json.load(f)
+    cifrar_archivo("passwords.json")
+    
+    for item in datos:
+        item["contraseña"] = fernet.decrypt(item["contraseña"].encode()).decode()
+    return datos
+
+# ========== ESCANER DE VULNERABILIDADES ==========
+def escanear_vulnerabilidades(url):
+    try:
+        response = requests.get(url)
+        content = response.text
+        
+        vulnerabilidades = []
+        
+        # Detectar XSS
+        if re.search(r"<script>.*</script>", content, re.IGNORECASE):
+            vulnerabilidades.append("XSS (Cross-Site Scripting)")
+        
+        # Detectar SQLi
+        if re.search(r"select.*from|insert into|update.*set|delete from", content, re.IGNORECASE):
+            vulnerabilidades.append("SQL Injection")
+        
+        # Detectar CSRF
+        if not re.search(r"csrf_token", content, re.IGNORECASE):
+            vulnerabilidades.append("Posible CSRF (Cross-Site Request Forgery)")
+        
+        return vulnerabilidades
+    except Exception as e:
+        return [f"Error al escanear: {str(e)}"]
+
+def groq_explicacion_vulnerabilidades(vulnerabilidades):
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{
+                "role": "user",
+                "content": f"""Explica las siguientes vulnerabilidades encontradas:
+                {', '.join(vulnerabilidades)}
+                1. Qué son
+                2. Riesgos asociados
+                3. Cómo solucionarlas
+                Formato: Lista markdown con emojis"""
+            }],
+            temperature=0.4,
+            max_tokens=400
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"**Error:** {str(e)}"
+
+# ========== INTERFAZ PRINCIPAL ==========
+def main():
+    # Configuración de estilos CSS (sin cambios)
     st.markdown(f"""
     <style>
         .stApp {{
-            background: linear-gradient(rgba(0,0,0,0.9), rgba(0,0,0,0.9)),
+            background: linear-gradient(rgba(0,0,0,0.85), rgba(0,0,0,0.85)),
                         url('https://raw.githubusercontent.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/main/secuencia-vector-diseno-codigo-binario_53876-164420.png');
             background-size: cover;
             background-attachment: fixed;
             animation: fadeIn 1.5s ease-in;
         }}
         
-        .professional-header {{
-            background: linear-gradient(45deg, #000428, #004e92);
-            padding: 2rem;
-            border-radius: 15px;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 20px rgba(0,168,255,0.3);
+        @keyframes fadeIn {{
+            0% {{ opacity: 0; }}
+            100% {{ opacity: 1; }}
         }}
         
-        .feature-card {{
+        .stExpander > div {{
             background: rgba(18, 25, 38, 0.95) !important;
             backdrop-filter: blur(12px);
             border-radius: 15px;
-            padding: 1.5rem;
-            margin: 1rem 0;
             border: 1px solid rgba(0, 168, 255, 0.3);
             transition: all 0.3s ease;
         }}
         
-        .feature-card:hover {{
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,150,255,0.4);
+        .stExpander > div:hover {{
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0,150,255,0.2);
         }}
         
-        .status-bar {{
-            background: rgba(255,255,255,0.1);
-            padding: 1rem;
-            border-radius: 10px;
-            margin: 1rem 0;
+        .stButton > button {{
+            transition: all 0.3s !important;
+            border: 1px solid #00a8ff !important;
         }}
         
-        .ai-status {{
-            color: #00ff88;
-            font-weight: bold;
-            animation: pulse 2s infinite;
+        .stButton > button:hover {{
+            transform: scale(1.03);
+            background: rgba(0,168,255,0.15) !important;
         }}
         
-        @keyframes pulse {{
-            0% {{ opacity: 0.8; }}
-            50% {{ opacity: 1; }}
-            100% {{ opacity: 0.8; }}
+        .chat-message {{
+            animation: slideIn 0.4s ease-out;
         }}
         
-        footer {{
-            position: fixed;
-            bottom: 0;
-            width: 100%;
-            background: rgba(0,0,0,0.7);
-            padding: 1rem;
-            text-align: center;
-            border-top: 1px solid #00a8ff;
+        @keyframes slideIn {{
+            0% {{ transform: translateX(15px); opacity: 0; }}
+            100% {{ transform: translateX(0); opacity: 1; }}
+        }}
+        
+        h1, h2, h3 {{
+            text-shadow: 0 0 12px rgba(0,168,255,0.5);
+        }}
+        
+        .stProgress > div > div {{
+            background: linear-gradient(90deg, #00a8ff, #00ff88);
+            border-radius: 3px;
         }}
     </style>
     """, unsafe_allow_html=True)
 
-# ========== NUEVO SISTEMA DE CHAT CON VOZ ==========
-def interfaz_chat_avanzado():
-    st.subheader("💬 Asistente de Seguridad Inteligente")
+    st.title("🔐 WildPassPro - Suite de Seguridad")
     
-    col1, col2 = st.columns([3,1])
-    with col2:
-        tts_toggle = st.toggle("Voz activada", True, help="Activar/Desactivar síntesis de voz")
-    
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = [{"role": "assistant", "content": "¡Hola! Soy tu experto en seguridad. ¿En qué puedo ayudarte hoy?"}]
+    # Verificar si el dataset ya existe
+    if not os.path.exists("password_dataset.csv"):
+        with st.spinner("Generando dataset con Groq (esto puede tomar 2-3 mins)..."):
+            df = generar_dataset_groq(num_samples=100)  # Empieza con 100 muestras
+    else:
+        df = pd.read_csv("password_dataset.csv")
 
-    for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
-            st.markdown(msg["content"])
-            if msg["role"] == "assistant" and tts_toggle:
-                hablar_texto(msg["content"])
+    # Preprocesar el dataset
+    X, y, label_encoder = preprocesar_dataset(df)
 
-    if prompt := st.chat_input("Escribe tu pregunta o comando..."):
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        
-        with st.spinner("🔍 Analizando y generando respuesta..."):
-            try:
-                response = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=[{
-                        "role": "system",
-                        "content": """Eres un experto en seguridad especializado en gestión de credenciales. 
-                        Responde de manera profesional y detallada sobre: 
-                        - Análisis de contraseñas
-                        - Generación de claves seguras
-                        - Prácticas de seguridad digital
-                        - Cifrado de datos
-                        - Vulnerabilidades comunes"""
-                    }] + st.session_state.chat_history[-3:],
-                    temperature=0.3,
-                    max_tokens=400
-                ).choices[0].message.content
-                
-                with st.chat_message("assistant", avatar="🤖"):
-                    typewriter_effect(response)
-                    if tts_toggle:
-                        hablar_texto(response)
-                
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-                st.rerun()
-                
-            except Exception as e:
-                st.error(f"Error en el sistema de IA: {str(e)}")
+    # Verificar si el modelo ya está entrenado
+    if not os.path.exists("password_strength_model.h5"):
+        with st.spinner("Entrenando la red neuronal..."):
+            model = crear_modelo()
+            model, history = entrenar_modelo(model, X, y)
+            st.success("Modelo entrenado exitosamente!")
+    else:
+        model = tf.keras.models.load_model("password_strength_model.h5")
 
-# ========== SISTEMA DE ANALISIS MEJORADO ==========
-def analizador_mejorado():
-    st.subheader("🔍 Analizador Profesional de Contraseñas")
-    password = st.text_input("Ingresa tu contraseña para análisis:", type="password", key="pwd_input")
-    
-    if password:
-        with st.status("Realizando análisis avanzado...", expanded=True) as status:
-            st.write("🔒 Verificando contra bases de datos conocidas...")
-            time.sleep(0.5)
-            st.write("🧠 Ejecutando modelo predictivo...")
-            time.sleep(0.5)
-            st.write("📊 Generando reporte de seguridad...")
-            time.sleep(0.5)
-            
-            weaknesses = detect_weakness(password)
-            final_strength = "DÉBIL 🔴" if weaknesses else "FUERTE 🟢"
-            status.update(label="Análisis Completo", state="complete")
-        
-        col1, col2 = st.columns([1,2])
-        with col1:
-            st.subheader("📊 Evaluación Final")
-            st.metric("Nivel de Seguridad", final_strength)
-            st.progress(0.9 if not weaknesses else 0.3)
-            
-            if weaknesses:
-                with st.expander("🔍 Detalles de Vulnerabilidades"):
-                    for weakness in weaknesses:
-                        st.error(weakness)
-            else:
-                st.success("✅ Cumple con todos los estándares de seguridad")
-        
-        with col2:
-            st.subheader("🧠 Análisis de IA")
-            analysis = groq_analysis(password)
-            st.markdown(analysis)
-
-# ========== FUNCIÓN PRINCIPAL MEJORADA ==========
-def main():
-    aplicar_estilos_profesionales()
-    configurar_voz()
-    
-    st.title("🔐 WildPassPro - Enterprise Security Suite")
-    st.markdown("<div class='status-bar'>🟢 Estado del Sistema: <span class='ai-status'>IA OPERATIVA AL 100%</span></div>", unsafe_allow_html=True)
-    
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🏠 Inicio", "🛠️ Generadores", "🔒 Bóveda", "📊 Analizador", "💬 Asistente IA"])
-    
-    with tab1:
-        st.markdown("<div class='professional-header'><h2>Plataforma Integral de Seguridad Digital</h2></div>", unsafe_allow_html=True)
-        st.markdown("""
-        <div class='feature-card'>
-            <h3>🚀 Características Principales</h3>
-            <ul>
-                <li>Generación de contraseñas de nivel militar</li>
-                <li>Bóveda cifrada con doble autenticación</li>
-                <li>Análisis predictivo con IA</li>
-                <li>Asistente de seguridad con voz</li>
-                <li>Protección contra ataques de fuerza bruta</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
+    # Interfaz con pestañas
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🛠️ Generadores", "🔒 Bóveda", "🔍 Analizador", "💬 Chatbot", "🌐 Escáner Web"])
     
     with tab2:
-        with st.container():
-            st.subheader("🔑 Generador de Contraseñas Seguras")
-            col_gen1, col_gen2 = st.columns(2)
-            with col_gen1:
-                pwd_length = st.slider("Longitud", 12, 64, 16, key="pwd_length")
-                pwd_complexity = st.selectbox("Complejidad", ["Alta", "Extrema", "Personalizada"])
-            with col_gen2:
-                if st.button("🔄 Generar Contraseña", use_container_width=True):
-                    secure_pwd = generate_secure_password(pwd_length)
-                    st.session_state.generated_pwd = secure_pwd
-                
-                if 'generated_pwd' in st.session_state:
-                    st.code(st.session_state.generated_pwd, language="text")
-                    st.download_button("📥 Descargar Contraseña", 
-                                      st.session_state.generated_pwd,
-                                      file_name="contraseña_segura.txt")
-    
-    with tab3:
-        st.subheader("🔒 Bóveda Digital Empresarial")
-        password = st.text_input("Contraseña Maestra:", type="password", key="vault_pwd")
+        st.subheader("🔒 Bóveda de Contraseñas")
         
-        if password == MASTER_PASSWORD:
-            with st.expander("📤 Subir Archivo", expanded=True):
-                archivo_subido = st.file_uploader("Seleccionar archivo confidencial:", type=None)
-                if archivo_subido:
-                    with st.spinner("🔒 Cifrando y almacenando..."):
-                        file_hash = calcular_hash_archivo(archivo_subido.name)
-                        st.success(f"✅ Archivo protegido | Hash: {file_hash[:12]}...")
-            
-            with st.expander("📥 Archivos Cifrados"):
-                if os.path.exists("secure_vault"):
-                    archivos = [f for f in os.listdir("secure_vault") if f.endswith(".encrypted")]
-                    if archivos:
-                        archivo_seleccionado = st.selectbox("Seleccionar archivo:", archivos)
-                        if st.button("Descifrar y Verificar"):
-                            ruta_completa = os.path.join("secure_vault", archivo_seleccionado)
-                            # Aquí iría la lógica de descifrado y verificación
-                    else:
-                        st.info("No hay archivos en la bóveda")
-        else:
-            if password:
-                st.error("Acceso no autorizado ⚠️")
-    
-    with tab4:
-        analizador_mejorado()
+        with st.expander("➕ Añadir Nueva Contraseña"):
+            sitio = st.text_input("Sitio Web/App")
+            usuario = st.text_input("Usuario")
+            contraseña = st.text_input("Contraseña", type="password")
+            if st.button("Guardar Contraseña"):
+                if sitio and usuario and contraseña:
+                    guardar_contraseña(sitio, usuario, contraseña)
+                    st.success("Contraseña guardada con éxito!")
+                else:
+                    st.error("Por favor, completa todos los campos.")
+        
+        with st.expander("🔍 Ver Contraseñas"):
+            contraseñas = obtener_contraseñas()
+            if contraseñas:
+                for idx, item in enumerate(contraseñas):
+                    with st.container():
+                        st.write(f"**Sitio:** {item['sitio']}")
+                        st.write(f"**Usuario:** {item['usuario']}")
+                        st.write(f"**Contraseña:** `{item['contraseña']}`")
+                        if st.button(f"Eliminar {item['sitio']}", key=f"del_{idx}"):
+                            contraseñas.pop(idx)
+                            with open("passwords.json", "w") as f:
+                                json.dump(contraseñas, f)
+                            cifrar_archivo("passwords.json")
+                            st.rerun()
+            else:
+                st.info("No hay contraseñas guardadas aún.")
     
     with tab5:
-        interfaz_chat_avanzado()
-    
-    st.markdown("<footer>WildPassPro 2024 | Sistema de Seguridad Certificado ISO 27001</footer>", unsafe_allow_html=True)
+        st.subheader("🌐 Escáner de Vulnerabilidades Web")
+        
+        url = st.text_input("Ingresa la URL del sitio web a escanear:")
+        if url:
+            with st.spinner("Escaneando..."):
+                vulnerabilidades = escanear_vulnerabilidades(url)
+                if vulnerabilidades:
+                    st.error("⚠️ Vulnerabilidades encontradas:")
+                    for vuln in vulnerabilidades:
+                        st.write(f"- {vuln}")
+                    
+                    st.subheader("📚 Explicación de las Vulnerabilidades")
+                    explicacion = groq_explicacion_vulnerabilidades(vulnerabilidades)
+                    st.markdown(explicacion)
+                else:
+                    st.success("✅ No se encontraron vulnerabilidades comunes.")
 
 if __name__ == "__main__":
     main()
