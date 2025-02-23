@@ -57,18 +57,7 @@ def calcular_hash_archivo(ruta_archivo):
         hasher.update(buf)
     return hasher.hexdigest()
 
-# ========== SISTEMA DE VOZ MEJORADO ==========
-def configurar_voz():
-    voces = TTS_ENGINE.getProperty('voices')
-    TTS_ENGINE.setProperty('voice', voces[0].id)  # Seleccionar voz en español si está disponible
-    TTS_ENGINE.setProperty('rate', 150)
-    
-def hablar_texto(texto):
-    try:
-        TTS_ENGINE.say(texto)
-        TTS_ENGINE.runAndWait()
-    except Exception as e:
-        st.error(f"Error en síntesis de voz: {str(e)}")
+
 
 # ========== INTERFAZ PROFESIONAL MEJORADA ==========
 def aplicar_estilos_profesionales():
