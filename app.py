@@ -13,7 +13,7 @@ import os
 # ================= CONFIGURACIÓN =================
 GROQ_API_KEY = "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"
 MODEL_NAME = "llama3-70b-8192"
-MODEL_URL = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/password_strength_model.h5"
+MODEL_URL = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/blob/main/password_strength_model.keras"
 
 # ================= FUNCIONES =================
 def generar_clave_cifrado():
