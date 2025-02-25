@@ -130,7 +130,7 @@ def cargar_modelo_desde_github():
     """
     Descarga el modelo entrenado desde GitHub y lo carga.
     """
-    url = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/password_strength_model.keras"
+    url = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/refs/heads/main/password_strength_model%20(1).keras"
     try:
         response = requests.get(url)
         response.raise_for_status()  # Lanza un error si la descarga falla
