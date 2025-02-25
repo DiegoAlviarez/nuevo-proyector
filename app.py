@@ -41,21 +41,32 @@ def generar_clave_cifrado():
 
 CLAVE_CIFRADO = generar_clave_cifrado()
 fernet = Fernet(CLAVE_CIFRADO)
-
 # ========== FUNCIONES DE LA RED NEURONAL ==========
 def cargar_modelo_desde_github():
+    """
+    Descarga el modelo entrenado desde GitHub y lo carga.
+    """
     url = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/password_strength_model.h5"
-    response = requests.get(url)
-    with open("password_strength_model.h5", "wb") as f:
-        f.write(response.content)
-    return load_model("password_strength_model.h5")
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Lanza un error si la descarga falla
+        with open("password_strength_model.h5", "wb") as f:
+            f.write(response.content)
+        model = load_model("password_strength_model.h5")
+        return model
+    except Exception as e:
+        st.error(f"Error al cargar el modelo: {e}")
+        return None
 
 def predecir_fortaleza(model, password):
+    """
+    Predice la fortaleza de una contraseña utilizando el modelo.
+    """
     features = np.array([
-        len(password),
-        int(any(c.isupper() for c in password)),
-        int(any(c.isdigit() for c in password)),
-        int(any(c in "!@#$%^&*()" for c in password)),
+        len(password),  # Longitud de la contraseña
+        int(any(c.isupper() for c in password)),  # Contiene mayúsculas
+        int(any(c.isdigit() for c in password)),  # Contiene números
+        int(any(c in "!@#$%^&*()" for c in password)),  # Contiene símbolos
         int(password.lower() in ["diego", "juan", "maria", "pedro", "media"]),  # Nombres comunes
         int("123" in password or "abc" in password.lower() or "809" in password)  # Secuencias comunes
     ]).reshape(1, 6)  # Asegurarse de que tenga la forma correcta (1, 6)
@@ -64,6 +75,9 @@ def predecir_fortaleza(model, password):
     return np.argmax(prediction)  # 0: débil, 1: media, 2: fuerte
 
 def explicar_fortaleza(password):
+    """
+    Explica las razones de la fortaleza de la contraseña.
+    """
     explicaciones = []
     if len(password) >= 12:
         explicaciones.append("✅ Longitud adecuada (más de 12 caracteres)")
@@ -147,7 +161,11 @@ def main():
     # Cargar el modelo desde GitHub
     with st.spinner("Cargando el modelo de red neuronal..."):
         model = cargar_modelo_desde_github()
-        st.success("Modelo cargado exitosamente!")
+        if model is not None:
+            st.success("Modelo cargado exitosamente!")
+        else:
+            st.error("No se pudo cargar el modelo. Por favor, verifica el archivo.")
+            return
 
     # Interfaz con pestañas
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🛠️ Generadores", "🔒 Bóveda", "🔍 Analizador", "💬 Chatbot", "🌐 Escáner Web", "🔐 Verificador de Fugas"])
