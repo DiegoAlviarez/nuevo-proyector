@@ -273,10 +273,10 @@ def main():
 # ========== INTERFAZ PRINCIPAL ==========
 #Monitorización en Tiempo Real:    
 # En la interfaz principal
-with st.expander("📈 Rendimiento del Modelo"):
-    if os.path.exists('training_metrics.json'):
-        metrics = json.load(open('training_metrics.json'))
-        st.line_chart(pd.DataFrame(metrics))
+    with st.expander("📈 Rendimiento del Modelo"):
+        if os.path.exists('training_metrics.json'):
+            metrics = json.load(open('training_metrics.json'))
+            st.line_chart(pd.DataFrame(metrics))
 
 # ========== INTERFAZ PRINCIPAL ==========
 def main():
