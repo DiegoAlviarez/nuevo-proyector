@@ -194,25 +194,29 @@ def entrenar_modelo(model, X, y):
     fold_no = 1
     avg_metrics = {'loss': 0, 'accuracy': 0, 'precision': 0, 'recall': 0}
     
+    # Mejora 2: Early Stopping
+    early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+    checkpoint = ModelCheckpoint('best_model.h5', save_best_only=True)
+    
     for train_idx, val_idx in kf.split(X, y):
-        # Mejora 2: Early Stopping
-        callbacks = [
-            EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
-            ModelCheckpoint(f'best_model_fold_{fold_no}.h5', save_best_only=True)
-        ]
+        X_train, X_val = X[train_idx], X[val_idx]
+        y_train, y_val = y[train_idx], y[val_idx]
         
         history = model.fit(
-            X[train_idx], y[train_idx],
+            X_train, y_train,
             epochs=50,
             batch_size=32,
-            validation_data=(X[val_idx], y[val_idx]),
-            callbacks=callbacks,
+            validation_data=(X_val, y_val),
+            callbacks=[early_stop, checkpoint],
             verbose=0
         )
         
-        # Acumular métricas
-        for metric in avg_metrics:
-            avg_metrics[metric] += history.history[metric][-1]
+        # Evaluar el fold
+        results = model.evaluate(X_val, y_val, verbose=0)
+        avg_metrics['loss'] += results[0]
+        avg_metrics['accuracy'] += results[1]
+        avg_metrics['precision'] += results[2]
+        avg_metrics['recall'] += results[3]
         
         fold_no += 1
     
@@ -220,7 +224,8 @@ def entrenar_modelo(model, X, y):
     for metric in avg_metrics:
         avg_metrics[metric] /= kf.n_splits
     
-    # Guardar modelo final
+    # Entrenamiento final con todos los datos
+    model.fit(X, y, epochs=50, batch_size=32, verbose=0)
     model.save("password_strength_model.h5")
     
     return model, avg_metrics
@@ -268,11 +273,10 @@ def validacion_cruzada(X, y, n_splits=5):
     st.write(f"Precisión promedio en CV: {np.mean(accuracies):.2%}")
 
 # ========== ACTUALIZAR INTERFAZ PRINCIPAL ==========
-def main():
-    # ... (código existente)
-# ========== INTERFAZ PRINCIPAL ==========
-#Monitorización en Tiempo Real:    
-# En la interfaz principal
+def main1():
+    # ========== INTERFAZ PRINCIPAL ==========
+    #Monitorización en Tiempo Real:    
+    # En la interfaz principal
     with st.expander("📈 Rendimiento del Modelo"):
         if os.path.exists('training_metrics.json'):
             metrics = json.load(open('training_metrics.json'))
@@ -326,27 +330,30 @@ def main():
     
     X, y, _ = preprocesar_dataset(df)
     
- # Dentro de la sección de entrenamiento del modelo
+# Modificar la sección de entrenamiento del modelo
     if not os.path.exists("password_strength_model.h5"):
         with st.spinner("Entrenando la red neuronal con validación cruzada..."):
             model = crear_modelo()
             model, cv_metrics = entrenar_modelo(model, X, y)
             
             # Mostrar métricas de CV
-            with st.expander("📊 Métricas de Validación Cruzada"):
-                st.metric("Precisión Promedio", f"{cv_metrics['accuracy']*100:.2f}%")
-                st.metric("Precisión", f"{cv_metrics['precision']*100:.2f}%")
-                st.metric("Recall", f"{cv_metrics['recall']*100:.2f}%")
+            with st.expander("📊 Métricas de Validación Cruzada (5 folds)"):
+                cols = st.columns(4)
+                cols[0].metric("Pérdida Promedio", f"{cv_metrics['loss']:.4f}")
+                cols[1].metric("Exactitud", f"{cv_metrics['accuracy']*100:.2f}%")
+                cols[2].metric("Precisión", f"{cv_metrics['precision']*100:.2f}%")
+                cols[3].metric("Recall", f"{cv_metrics['recall']*100:.2f}%")
                 
                 # Gráfico de métricas
                 fig, ax = plt.subplots()
-                ax.bar(['Precisión', 'Recall', 'Exactitud'], 
-                      [cv_metrics['precision'], cv_metrics['recall'], cv_metrics['accuracy']])
-                ax.set_ylim(0, 1)
+                metrics = ['Exactitud', 'Precisión', 'Recall']
+                values = [cv_metrics['accuracy'], cv_metrics['precision'], cv_metrics['recall']]
+                ax.barh(metrics, values, color=['#00a8ff', '#00ff88', '#ffbb33'])
+                ax.set_xlim(0, 1)
+                ax.set_title("Rendimiento Promedio del Modelo")
                 st.pyplot(fig)
                 
             st.success("Modelo entrenado exitosamente!")
-
     # Interfaz con pestañas
     tab1, tab2, tab3, tab4 = st.tabs(["🛠️ Generadores", "🔒 Bóveda", "🔍 Analizador", "💬 Chatbot"])
     
