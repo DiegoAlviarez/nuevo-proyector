@@ -132,7 +132,6 @@ NOMBRES_COMUNES = {"Diego", "juan", "Maria", "pedro", "Sofia", "carlos", "Ana", 
 PATRONES_DEBILES = {"123", "abc", "qwerty", "password", "111", "000", "654321"}
 
 # Función para extraer características
-
 def extraer_caracteristicas(password):
     password_lower = password.lower()
     return np.array([
@@ -146,7 +145,6 @@ def extraer_caracteristicas(password):
     ])
 
 # Creación del modelo
-
 def crear_modelo():
     model = Sequential([
         Dense(64, activation='relu', input_shape=(7,)),  # 7 características
@@ -158,7 +156,6 @@ def crear_modelo():
     return model
 
 # Entrenamiento del modelo
-
 def entrenar_modelo(model, X, y):
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
     history = model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_val, y_val), verbose=1)
@@ -166,7 +163,6 @@ def entrenar_modelo(model, X, y):
     return model, history
 
 # Predicción de la fortaleza
-
 def predecir_fortaleza(model, password):
     features = extraer_caracteristicas(password).reshape(1, -1)
     prediction = model.predict(features, verbose=0)
@@ -357,7 +353,7 @@ def main():
     st.title("🔐 WildPassPro - Suite de Seguridad")
     
     # Cargar el dataset desde GitHub
-    dataset_url = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/password_dataset_500.csv"
+    dataset_url = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/password_dataset_final.csv"
     df = pd.read_csv(dataset_url)
 
     # Preprocesar el dataset
