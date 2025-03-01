@@ -17,7 +17,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from cryptography.fernet import Fernet
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
+from tensorflow.keras.callbacks import EarlyStopping
 
 # Configuración de Groq
 GROQ_API_KEY = "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"
@@ -127,57 +128,93 @@ def groq_analysis(password):
         return f"**Error:** {str(e)}"
 
 # ========== FUNCIONES DE LA RED NEURONAL ==========
-# Lista de nombres comunes
-NOMBRES_COMUNES = {"Diego", "juan", "Maria", "pedro", "Sofia", "carlos", "Ana", "jose", "Luis", "laura", "Fernando", "andrea", "Miguel", "camila", "Ricardo", "valentina", "Daniel", "karla", "Jorge", "soledad"}
-PATRONES_DEBILES = {"123", "abc", "qwerty", "password", "111", "000", "654321"}
-
-# Función para extraer características
-def extraer_caracteristicas(password):
-    password_lower = password.lower()
-    return np.array([
-        len(password),  # Longitud
-        sum(c.islower() for c in password),  # Cantidad de minúsculas
-        sum(c.isupper() for c in password),  # Cantidad de mayúsculas
-        sum(c.isdigit() for c in password),  # Cantidad de números
-        sum(c in "!@#$%^&*()-_=+[]{};:'\"|\\,.<>?/" for c in password),  # Símbolos
-        int(any(seq in password_lower for seq in PATRONES_DEBILES)),  # Patrones débiles
-        int(any(name.lower() in password_lower for name in NOMBRES_COMUNES))  # Nombres comunes
-    ])
-
-# Creación del modelo
 def crear_modelo():
     model = Sequential([
-        Dense(64, activation='relu', input_shape=(7,)),  # 7 características
-        Dense(32, activation='relu'),
+        Dense(64, activation='relu', input_shape=(8,)),  # Aumentamos el número de neuronas
+        BatchNormalization(),
+        Dropout(0.3),
+        
+        Dense(32, activation='relu'),  # Aumentamos el número de neuronas
+        BatchNormalization(),
+        Dropout(0.3),
+        
         Dense(16, activation='relu'),
-        Dense(3, activation='softmax')  # 3 clases de salida
+        BatchNormalization(),
+        Dropout(0.3),
+        
+        Dense(3, activation='softmax')  # 3 clases: débil, media, fuerte
     ])
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
     return model
 
-# Entrenamiento del modelo
 def entrenar_modelo(model, X, y):
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
-    history = model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_val, y_val), verbose=1)
+    
+    early_stop = EarlyStopping(
+        monitor='val_loss',
+        patience=5,  # Aumentamos la paciencia para permitir más iteraciones
+        restore_best_weights=True
+    )
+    
+    history = model.fit(
+        X_train, y_train,
+        epochs=100,  # Aumentamos el número de épocas
+        batch_size=32,
+        validation_data=(X_val, y_val),
+        callbacks=[early_stop],
+        verbose=0
+    )
     model.save("password_strength_model.h5")
     return model, history
 
-# Predicción de la fortaleza
 def predecir_fortaleza(model, password):
-    features = extraer_caracteristicas(password).reshape(1, -1)
+    features = np.array([
+        len(password),
+        sum(1 for c in password if c.islower()),
+        sum(1 for c in password if c.isupper()),
+        sum(1 for c in password if c.isdigit()),
+        sum(1 for c in password if c in "!@#$%^&*()"),
+        int(password.lower() in ["maria", "juan", "pedro", "diego", "media"]),
+        int("123" in password or "abc" in password.lower() or "809" in password),
+        len(set(password))
+    ]).reshape(1, 8)
+    
     prediction = model.predict(features, verbose=0)
-    return np.argmax(prediction)  # 0: débil, 1: media, 2: fuerte
+    return np.argmax(prediction)
+
+def explicar_fortaleza(password):
+    explicaciones = []
+    if len(password) >= 12:
+        explicaciones.append("✅ Longitud adecuada (más de 12 caracteres)")
+    else:
+        explicaciones.append("❌ Longitud insuficiente (menos de 12 caracteres)")
+    if any(c.isupper() for c in password):
+        explicaciones.append("✅ Contiene mayúsculas")
+    if any(c.isdigit() for c in password):
+        explicaciones.append("✅ Contiene números")
+    if any(c in "!@#$%^&*()" for c in password):
+        explicaciones.append("✅ Contiene símbolos especiales")
+    if password.lower() in ["maria", "juan", "pedro", "diego", "media"]:
+        explicaciones.append("❌ Contiene un nombre común")
+    if "123" in password or "abc" in password.lower() or "809" in password:
+        explicaciones.append("❌ Contiene una secuencia simple")
+    if len(set(password)) < len(password) * 0.5:
+        explicaciones.append("❌ Baja variabilidad de caracteres")
+    return explicaciones
 
 # ========== PREPROCESAR DATASET ==========
 def preprocesar_dataset(df):
     X = np.array([[
         len(row["password"]),
-        int(any(c.isupper() for c in row["password"])),
-        int(any(c.isdigit() for c in row["password"])),
-        int(any(c in "!@#$%^&*()" for c in row["password"])),
-        int(row["password"].lower() in ["diego", "juan", "maria", "pedro", "media"]),  # Nombres comunes
-        int("123" in row["password"] or "abc" in row["password"].lower() or "809" in row["password"])  # Secuencias comunes
+        sum(1 for c in row["password"] if c.islower()),
+        sum(1 for c in row["password"] if c.isupper()),
+        sum(1 for c in row["password"] if c.isdigit()),
+        sum(1 for c in row["password"] if c in "!@#$%^&*()"),
+        int(row["password"].lower() in ["maria", "juan", "pedro", "diego", "media"]),
+        int("123" in row["password"] or "abc" in row["password"].lower() or "809" in row["password"]),
+        len(set(row["password"]))
     ] for _, row in df.iterrows()])
+    
     y = df["strength"].values
     label_encoder = LabelEncoder()
     y = label_encoder.fit_transform(y)
@@ -222,15 +259,12 @@ def escanear_vulnerabilidades(url):
         
         vulnerabilidades = []
         
-        # Detectar XSS
         if re.search(r"<script>.*</script>", content, re.IGNORECASE):
             vulnerabilidades.append("XSS (Cross-Site Scripting)")
         
-        # Detectar SQLi
         if re.search(r"select.*from|insert into|update.*set|delete from", content, re.IGNORECASE):
             vulnerabilidades.append("SQL Injection")
         
-        # Detectar CSRF
         if not re.search(r"csrf_token", content, re.IGNORECASE):
             vulnerabilidades.append("Posible CSRF (Cross-Site Request Forgery)")
         
@@ -264,7 +298,6 @@ def descargar_contraseñas_txt(contraseñas):
     for idx, pwd in enumerate(contraseñas, start=1):
         contenido += f"{idx}. {pwd}\n"
     
-    # Crear un archivo en memoria
     buffer = io.StringIO()
     buffer.write(contenido)
     buffer.seek(0)
@@ -273,7 +306,6 @@ def descargar_contraseñas_txt(contraseñas):
 # ========== VERIFICADOR DE FUGAS DE DATOS ==========
 def verificar_fuga_datos(password):
     try:
-        # Usamos la API de Have I Been Pwned para verificar fugas de datos
         sha1_password = hashlib.sha1(password.encode()).hexdigest().upper()
         prefix, suffix = sha1_password[:5], sha1_password[5:]
         response = requests.get(f"https://api.pwnedpasswords.com/range/{prefix}")
@@ -291,7 +323,6 @@ def verificar_fuga_datos(password):
 
 # ========== INTERFAZ PRINCIPAL ==========
 def main():
-    # Configuración de estilos CSS (sin cambios)
     st.markdown(f"""
     <style>
         .stApp {{
@@ -352,14 +383,11 @@ def main():
 
     st.title("🔐 WildPassPro - Suite de Seguridad")
     
-    # Cargar el dataset desde GitHub
     dataset_url = "https://github.com/AndersonP444/PROYECTO-IA-SIC-The-Wild-Project/raw/main/password_dataset_final.csv"
     df = pd.read_csv(dataset_url)
 
-    # Preprocesar el dataset
     X, y, label_encoder = preprocesar_dataset(df)
 
-    # Verificar si el modelo ya está entrenado
     if not os.path.exists("password_strength_model.h5"):
         with st.spinner("Entrenando la red neuronal..."):
             model = crear_modelo()
@@ -368,10 +396,8 @@ def main():
     else:
         model = tf.keras.models.load_model("password_strength_model.h5")
 
-    # Interfaz con pestañas
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🛠️ Generadores", "🔒 Bóveda", "🔍 Analizador", "💬 Chatbot", "🌐 Escáner Web", "🔐 Verificador de Fugas"])
 
-    # ========== PESTAÑA 1: GENERADORES ==========
     with tab1:
         st.subheader("🛠️ Generadores")
         
@@ -384,7 +410,6 @@ def main():
                 secure_password = generate_secure_password(password_length)
                 st.success(f"**Contraseña generada:** `{secure_password}`")
                 
-                # Botón para descargar la contraseña en un archivo TXT
                 buffer = descargar_contraseñas_txt([secure_password])
                 st.download_button(
                     label="📥 Descargar Contraseña",
@@ -399,7 +424,6 @@ def main():
                 access_key = generate_access_key()
                 st.success(f"**Llave de acceso generada:** `{access_key}`")
                 
-                # Botón para descargar la llave de acceso en un archivo TXT
                 buffer = descargar_contraseñas_txt([access_key])
                 st.download_button(
                     label="📥 Descargar Llave de Acceso",
@@ -408,7 +432,6 @@ def main():
                     mime="text/plain"
                 )
     
-    # ========== PESTAÑA 2: BÓVEDA ==========
     with tab2:
         st.subheader("🔒 Bóveda de Contraseñas")
         
@@ -440,7 +463,6 @@ def main():
             else:
                 st.info("No hay contraseñas guardadas aún.")
     
-    # ========== PESTAÑA 3: ANALIZADOR ==========
     with tab3:
         st.subheader("🔍 Analizar Contraseña")
         password = st.text_input("Ingresa tu contraseña:", type="password", key="pwd_input")
@@ -449,7 +471,6 @@ def main():
             weaknesses = detect_weakness(password)
             final_strength = "DÉBIL 🔴" if weaknesses else "FUERTE 🟢"
             
-            # Predicción de la red neuronal
             strength_prediction = predecir_fortaleza(model, password)
             strength_labels = ["DÉBIL 🔴", "MEDIA 🟡", "FUERTE 🟢"]
             neural_strength = strength_labels[strength_prediction]
@@ -468,7 +489,7 @@ def main():
                 st.subheader("🧠 Predicción de Red Neuronal")
                 st.markdown(f"## {neural_strength}")
                 
-                if strength_prediction == 2:  # Si es fuerte
+                if strength_prediction == 2:
                     st.success("### Explicación de la fortaleza:")
                     explicaciones = explicar_fortaleza(password)
                     for explicacion in explicaciones:
@@ -479,7 +500,6 @@ def main():
                 analysis = groq_analysis(password)
                 st.markdown(analysis)
     
-    # ========== PESTAÑA 4: CHATBOT ==========
     with tab4:
         st.subheader("💬 Asistente de Seguridad")
         
@@ -505,7 +525,6 @@ def main():
                         max_tokens=300
                     ).choices[0].message.content
                     
-                    # Efecto máquina de escribir
                     with st.chat_message("assistant"):
                         typewriter_effect(response)
                     
@@ -515,7 +534,6 @@ def main():
                 except Exception as e:
                     st.error(f"Error en el chatbot: {str(e)}")
     
-    # ========== PESTAÑA 5: ESCÁNER WEB ==========
     with tab5:
         st.subheader("🌐 Escáner de Vulnerabilidades Web")
         
@@ -534,7 +552,6 @@ def main():
                 else:
                     st.success("✅ No se encontraron vulnerabilidades comunes.")
     
-    # ========== PESTAÑA 6: VERIFICADOR DE FUGAS DE DATOS ==========
     with tab6:
         st.subheader("🔐 Verificador de Fugas de Datos")
         
